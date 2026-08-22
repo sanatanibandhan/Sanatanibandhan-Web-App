@@ -10,7 +10,7 @@ import {
   WifiOff, Heart, MessageSquare, Camera, CreditCard, QrCode, Mail, 
   History, Award, Star, ShieldCheck, FileText, Activity, Crown, Filter,
   HelpCircle, Lightbulb, FileDigit, FileDown, AlertTriangle, LayoutGrid, List, Ticket,
-  Ban
+  Ban, Flame, HeartHandshake
 } from 'lucide-react';
 import { pushToDataLayer } from '../utils/gtm'; 
 import { usePlanGate } from '../hooks/usePlanGate';
@@ -24,25 +24,34 @@ const encodeIdentity = (ident) => {
 };
 
 export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
-  const { t, workspaceType } = useLanguage(); 
+  const { t, language, workspaceType } = useLanguage(); 
   const { checkQuota } = usePlanGate(session);
+
+  // ✨ FAIL-SAFE TRANSLATION HELPER
+  const safeTranslate = (key, fallbackEn, fallbackBn, fallbackHi) => {
+    const trans = t(key);
+    if (trans !== key && trans) return trans;
+    if (language === 'bn') return fallbackBn;
+    if (language === 'hi') return fallbackHi;
+    return fallbackEn;
+  };
 
   // ✨ Dynamic Institution Label
   const institutionLabel = useMemo(() => {
     switch (String(workspaceType || '').toUpperCase()) {
-      case 'GOSHALA': return t('workspace_goshala') || 'Goshala';
-      case 'SANGHA': return t('workspace_sangha') || 'Sangha';
-      case 'ASHRAM': return t('workspace_ashram') || 'Ashram';
-      case 'GURUKUL': return t('workspace_gurukul') || 'Gurukul';
-      case 'SATSANG': return t('workspace_satsang') || 'Satsang';
-      case 'YOGA': return t('workspace_yoga') || 'Yoga Center';
-      case 'TRUST': return t('workspace_trust') || 'Trust';
-      case 'TIRTH': return t('workspace_tirth') || 'Tirth / Dham';
-      case 'SAMAJ': return t('workspace_samaj') || 'Samaj';
+      case 'GOSHALA': return safeTranslate('workspace_goshala', 'Goshala', 'গোশালা', 'गौशाला');
+      case 'SANGHA': return safeTranslate('workspace_sangha', 'Sangha', 'সংঘ', 'संघ');
+      case 'ASHRAM': return safeTranslate('workspace_ashram', 'Ashram', 'আশ্রম', 'आश्रम');
+      case 'GURUKUL': return safeTranslate('workspace_gurukul', 'Gurukul', 'গুরকুল', 'गुरुकुल');
+      case 'SATSANG': return safeTranslate('workspace_satsang', 'Satsang', 'সৎসঙ্গ', 'सत्संग');
+      case 'YOGA': return safeTranslate('workspace_yoga', 'Yoga Center', 'যোগ কেন্দ্র', 'योग केंद्र');
+      case 'TRUST': return safeTranslate('workspace_trust', 'Trust', 'ট্রাস্ট', 'ट्रस्ट');
+      case 'TIRTH': return safeTranslate('workspace_tirth', 'Tirth / Dham', 'তীর্থ', 'तीर्थ');
+      case 'SAMAJ': return safeTranslate('workspace_samaj', 'Samaj', 'সমাজ', 'समाज');
       case 'MANDIR':
-      default: return t('workspace_mandir') || 'Mandir';
+      default: return safeTranslate('workspace_mandir', 'Mandir', 'মন্দির', 'मंदिर');
     }
-  }, [workspaceType, t]);
+  }, [workspaceType, language, t]);
 
   // 💾 OFFLINE CACHE INITIALIZATION
   const [members, setMembers] = useState(() => {
@@ -188,14 +197,14 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
   const executeSafeUpdate = async (updates, successMsg = null, offlineMsg = null) => {
     if (!isOnline) {
       update(ref(db), updates).catch(e => console.error("Offline Sync Queued:", e));
-      showToast(offlineMsg || t('offline_saved') || "Saved offline. Syncing soon.", 'offline');
+      showToast(offlineMsg || safeTranslate('offline_saved', 'Saved offline. Syncing soon.', 'অফলাইনে সেভ করা হয়েছে।', 'ऑफ़लाइन सहेजा गया।'), 'offline');
       return Promise.resolve(); 
     }
     try {
       await update(ref(db), updates);
       if (successMsg) showToast(successMsg, 'success');
     } catch (e) {
-      showToast(t('error') + ": " + e.message, 'error');
+      showToast(safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') + ": " + e.message, 'error');
       throw e;
     }
   };
@@ -279,13 +288,13 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
     reader.onload = (event) => {
       const text = event.target.result;
       const lines = text.split('\n').filter(line => line.trim() !== '');
-      if (lines.length < 2) return showToast(t('error') || "CSV is empty or missing data rows.", "error");
+      if (lines.length < 2) return showToast(safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') + ": CSV is empty or missing data rows.", "error");
 
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
       const nameIdx = headers.indexOf('name');
       const phoneIdx = headers.indexOf('phone');
 
-      if (nameIdx === -1 || phoneIdx === -1) return showToast(t('error') || "CSV must contain 'Name' and 'Phone' headers.", "error");
+      if (nameIdx === -1 || phoneIdx === -1) return showToast(safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') + ": CSV must contain 'Name' and 'Phone' headers.", "error");
 
       const parsedData = [];
       for (let i = 1; i < lines.length; i++) {
@@ -308,17 +317,16 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
     e.target.value = ''; 
   };
 
-  // ✨ UPGRADED: Replaced window alert with Enterprise Confirm Dialog for Plan Limits
   const executeBulkImport = async () => {
     if (csvPreview.length === 0) return;
-    if (!isOnline) return showToast(t('error') || "Internet required for global identity validation.", "error");
+    if (!isOnline) return showToast(safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') + ": Internet required for global identity validation.", "error");
 
     const remainingSlots = mandirPlan === 'PREMIUM' ? Infinity : (memberLimit - devoteeCount);
     if (csvPreview.length > remainingSlots) {
       return setConfirmDialog({
-        title: t('upgrade_title') || "Smart Pro Upgrade Required",
+        title: safeTranslate('upgrade_title', 'Ready to Scale?', 'স্কেল করতে প্রস্তুত?', 'स्केल करने के लिए तैयार हैं?'),
         message: `You are trying to import ${csvPreview.length} profiles, but your FREE plan only has ${remainingSlots} slots left. Upgrade your workspace to add unlimited members.`,
-        confirmText: t('btn_cancel') || "UNDERSTOOD",
+        confirmText: safeTranslate('btn_cancel', 'Cancel', 'বাতিল', 'रद्द करें'),
         isDanger: true,
         onConfirm: () => setConfirmDialog(null)
       });
@@ -375,7 +383,8 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const img = new Image();
+      // 🚀 CRITICAL FIX: Replaced "new Image()" with "document.createElement('img')" to prevent mobile WebView crashes
+      const img = document.createElement('img');
       img.onload = async () => {
         const canvas = document.createElement('canvas');
         const MAX_SIZE = 400; 
@@ -391,7 +400,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8); 
 
         if (isEdit && activeMember) {
-           await executeSafeUpdate({ [`communities/${session.communityId}/members/${activeMember.id}/photoUrl`]: compressedBase64 }, t('record_updated') || "Profile photo updated!");
+           await executeSafeUpdate({ [`communities/${session.communityId}/members/${activeMember.id}/photoUrl`]: compressedBase64 }, safeTranslate('record_updated', 'Record updated successfully.', 'সফলভাবে আপডেট করা হয়েছে।', 'सफलतापूर्वक अपडेट किया गया।'));
            setActiveMember(prev => ({ ...prev, photoUrl: compressedBase64 }));
            pushToDataLayer('edit_photo', { community_id: session.communityId });
         } else {
@@ -411,7 +420,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
   const handleAddMember = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.phone || !formData.email || !formData.bloodGroup || !formData.country) {
-      return showToast(t('err_all_fields_req') || "Name, Phone, Email, Blood Group, and Country are explicitly required.", "error");
+      return showToast(safeTranslate('err_all_fields_req', 'All fields are required.', 'সব ফিল্ড পূরণ করা আবশ্যক।', 'सभी फ़ील्ड आवश्यक हैं।'), "error");
     }
     if (!checkQuota('free_member_limit', devoteeCount + 1)) return;
 
@@ -422,9 +431,9 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
       if (isOnline) {
         const phoneCheck = await get(ref(db, `identity_map/${encodedPhone}`));
-        if (phoneCheck.exists()) throw new Error(t('error') || "This phone number is already registered globally.");
+        if (phoneCheck.exists()) throw new Error(safeTranslate('error', 'Error') + ": This phone number is already registered globally.");
         const emailCheck = await get(ref(db, `identity_map/${encodedEmail}`));
-        if (emailCheck.exists()) throw new Error(t('error') || "This email is already registered globally.");
+        if (emailCheck.exists()) throw new Error(safeTranslate('error', 'Error') + ": This email is already registered globally.");
       }
 
       const memberId = `SB-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -449,7 +458,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       updates[`identity_map/${encodedPhone}`] = { commId: session.communityId, memberId, type: typeIdent };
       updates[`identity_map/${encodedEmail}`] = { commId: session.communityId, memberId, type: typeIdent };
 
-      await executeSafeUpdate(updates, t('recorded_success') || "Profile successfully provisioned!", "Profile saved to offline cache.");
+      await executeSafeUpdate(updates, safeTranslate('recorded_success', 'Record saved successfully!', 'সফলভাবে রেকর্ড করা হয়েছে!', 'सफलतापूर्वक दर्ज किया गया!'), "Profile saved to offline cache.");
       pushToDataLayer('add_member', { member_role: formData.role, community_id: session.communityId });
 
       import('../utils/pdfGenerator').then(({ generateLoginCredentialsPdf }) => {
@@ -485,14 +494,14 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
         collector: `${collectorName} (${session.uid})`, timestamp: ts, role: session.role
       };
 
-      await executeSafeUpdate(updates, `${curSymbol}${amt} recorded to Devotee profile.`, `Donation saved offline.`);
+      await executeSafeUpdate(updates, `${curSymbol}${amt} recorded to profile.`, `Donation saved offline.`);
       pushToDataLayer('purchase', { transaction_id: transId, affiliation: session.communityName, value: amt, currency: 'BDT', items: [{ item_name: 'Community Donation', item_category: 'Chanda', price: amt, quantity: 1 }] });
       logAudit("CHANDA_RECORDED", `Recorded ৳${amt} from ${activeMember.name}`);
 
       setConfirmDialog({
-        title: t('btn_confirm_chanda') || "Donation Recorded",
-        message: `✅ ${curSymbol}${amt} ${t('recorded_success') || 'recorded successfully!'}\n\nWould you like to download the official PDF receipt now?`,
-        confirmText: t('download_receipt') || "DOWNLOAD RECEIPT",
+        title: safeTranslate('btn_confirm_chanda', 'Confirm', 'নিশ্চিত করুন', 'पुष्टि करें'),
+        message: `✅ ${curSymbol}${amt} ${safeTranslate('recorded_success', 'recorded successfully!', 'সফলভাবে রেকর্ড করা হয়েছে!', 'सफलतापूर्वक दर्ज किया गया!')}\n\nWould you like to download the official PDF receipt now?`,
+        confirmText: safeTranslate('download_receipt', 'Download Receipt', 'রসিদ ডাউনলোড করুন', 'रसीद डाउनलोड करें'),
         isDanger: false,
         onConfirm: async () => {
           setConfirmDialog(null);
@@ -517,14 +526,14 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
         pushToDataLayer('export_qr_pdf', { community_id: session.communityId });
       } else {
         setConfirmDialog({
-          title: t('reset_pin') || "Generate Secure PIN",
-          message: "⚠️ No PIN found. Generate a new secure 4-digit PIN for instant access?",
-          confirmText: "GENERATE PIN",
+          title: safeTranslate('reset_pin', 'Generate Secure PIN', 'নিরাপদ পিন তৈরি করুন', 'सुरक्षित पिन बनाएँ'),
+          message: safeTranslate('no_pin_found', '⚠️ No PIN found. Generate a new secure 4-digit PIN for instant access?', '⚠️ কোনো পিন পাওয়া যায়নি। নতুন পিন তৈরি করবেন?', '⚠️ कोई पिन नहीं मिला। क्या नया पिन जनरेट करें?'),
+          confirmText: safeTranslate('generate_pin', 'GENERATE PIN', 'পিন তৈরি করুন', 'पिन जनरेट करें'),
           isDanger: false,
           onConfirm: async () => {
             setConfirmDialog(null);
             const newPin = Math.floor(1000 + Math.random() * 9000).toString().padStart(4, '0');
-            await executeSafeUpdate({ [`communities/${session.communityId}/logins/${activeMember.id}`]: newPin }, t('pass_updated_success') || "PIN Generated Successfully", "PIN generated offline.");
+            await executeSafeUpdate({ [`communities/${session.communityId}/logins/${activeMember.id}`]: newPin }, safeTranslate('pass_updated_success', 'Secure Password Updated Successfully!', 'পাসওয়ার্ড সফলভাবে আপডেট হয়েছে!', 'पासवर्ड सफलतापूर्वक अपडेट किया गया!'), "PIN generated offline.");
             setActiveMemberPin(newPin);
             localStorage.setItem(`sb_pin_${activeMember.id}`, newPin);
 
@@ -534,13 +543,13 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
           }
         });
       }
-    } catch (e) { showToast(t('error') + ": " + e.message, "error"); }
+    } catch (e) { showToast(safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') + ": " + e.message, "error"); }
   };
 
   const canEdit = session.role === 'ADMIN' || session.role === 'SUPER_ADMIN' || session.role === 'MANAGER' || session.uid === activeMember?.id;
 
   const handleEditField = (field, displayName) => {
-    if (!canEdit) return showToast(t('err_unauthorized') || "You do not have permission to edit this profile.", "error");
+    if (!canEdit) return showToast(safeTranslate('err_unauthorized', 'Unauthorized.', 'অননুমোদিত অ্যাক্সেস।', 'अनाधिकृत।'), "error");
     setEditModal({ field, displayName, value: activeMember[field] || '' });
   };
 
@@ -561,7 +570,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
          if (isOnline) {
            const checkSnap = await get(ref(db, `identity_map/${encodedNew}`));
            if (checkSnap.exists()) {
-             showToast(t('error') || `This ${displayName} is already registered globally!`, "error");
+             showToast(safeTranslate('error', 'Error') + ` This ${displayName} is already registered globally!`, "error");
              return;
            }
          }
@@ -573,7 +582,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       }
 
       updates[`communities/${session.communityId}/members/${activeMember.id}/${field}`] = trimmedVal;
-      await executeSafeUpdate(updates, t('record_updated') || `${displayName} successfully updated.`, "Profile update saved offline.");
+      await executeSafeUpdate(updates, safeTranslate('record_updated', 'Record updated successfully.', 'সফলভাবে আপডেট করা হয়েছে।', 'सफलतापूर्वक अपडेट किया गया।'), "Profile update saved offline.");
 
       pushToDataLayer('edit_member', { field_edited: field, community_id: session.communityId });
       logAudit("MEMBER_EDITED", `Updated ${displayName} for ${activeMember.id}`);
@@ -583,11 +592,11 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
   };
 
   const handleRoleChange = async (newRole) => {
-    if (activeMember.role === 'ADMIN') return showToast(t('err_unauthorized') || "Cannot alter the role of an existing Admin.", "error");
+    if (activeMember.role === 'ADMIN') return showToast(safeTranslate('err_unauthorized', 'Unauthorized.'), "error");
 
     setConfirmDialog({
-      title: "Update Role",
-      message: `Change system permission to ${newRole}?`,
+      title: "Update System Role",
+      message: `Change permission level to ${newRole}?`,
       confirmText: "UPDATE ROLE",
       isDanger: false,
       onConfirm: async () => {
@@ -599,7 +608,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
         if (activeMember.phone) updates[`identity_map/${encodeIdentity(activeMember.phone)}/type`] = typeIdent;
         if (activeMember.email) updates[`identity_map/${encodeIdentity(activeMember.email)}/type`] = typeIdent;
 
-        await executeSafeUpdate(updates, t('record_updated') || "Role actively modified.", "Role change saved offline.");
+        await executeSafeUpdate(updates, safeTranslate('record_updated', 'Record updated successfully.'), "Role change saved offline.");
         pushToDataLayer('change_member_role', { new_role: newRole });
         logAudit("ROLE_CHANGED", `Changed system role to ${newRole} for ${activeMember.id}`);
         setActiveMember(prev => ({ ...prev, role: newRole }));
@@ -608,8 +617,8 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
   };
 
   const handleDeleteMember = async () => {
-    if (activeMember.role === 'ADMIN') return showToast(t('err_unauthorized') || "Cannot delete an Admin profile.", "error");
-    if (!isOnline) return showToast(t('error') || "Internet connection required to delete accounts.", "error");
+    if (activeMember.role === 'ADMIN') return showToast(safeTranslate('err_unauthorized', 'Unauthorized.'), "error");
+    if (!isOnline) return showToast(safeTranslate('error', 'Error') + ": Internet connection required to delete accounts.", "error");
 
     if (session.role === 'MANAGER') {
       setConfirmDialog({
@@ -626,13 +635,13 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
               targetId: activeMember.id, status: 'PENDING', timestamp: serverTimestamp()
             });
             logAudit("DELETE_REQUESTED", `Manager ${session.userName} requested to delete profile ${activeMember.id}`);
-            showToast(t('req_submitted') || "Deletion request sent for approval.");
-          } catch (e) { showToast(t('error') || "Error sending request.", "error"); }
+            showToast(safeTranslate('req_submitted', 'Request Submitted!'));
+          } catch (e) { showToast(safeTranslate('error', 'Error'), "error"); }
         }
       });
     } else if (isAdmin) {
       setConfirmDialog({
-        title: t('delete_record') || "Permanent Deletion",
+        title: safeTranslate('delete_record', 'Permanently Erase Record'),
         message: `🚨 DANGER: This will completely erase ${activeMember.name}. Are you sure?`,
         confirmText: "DELETE PERMANENTLY",
         isDanger: true,
@@ -651,7 +660,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
             pushToDataLayer('delete_member', { community_id: session.communityId });
             logAudit("MEMBER_DELETED", `Admin erased member record: ${activeMember.name}`);
             setActiveMember(null);
-            showToast(t('success') || "Profile permanently deleted.");
+            showToast(safeTranslate('success', 'Success'));
           } catch (e) { showToast(e.message, "error"); }
         }
       });
@@ -673,7 +682,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
            </div>
            <div>
              <p className={`text-xs font-black uppercase tracking-widest mb-0.5 ${toast.type === 'offline' ? 'text-orange-400' : toast.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
-               {toast.type === 'offline' ? 'Offline Cache' : toast.type === 'error' ? t('error') || 'Error' : t('success') || 'Success'}
+               {toast.type === 'offline' ? 'Offline Cache' : toast.type === 'error' ? safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') : safeTranslate('success', 'Success', 'সফল', 'सफल')}
              </p>
              <p className="text-sm font-bold">{toast.message}</p>
            </div>
@@ -691,7 +700,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
             <h3 className="text-xl font-black text-gray-900 mb-2 tracking-tight">{confirmDialog.title}</h3>
             <p className="text-sm font-bold text-gray-500 mb-8 leading-relaxed whitespace-pre-wrap">{confirmDialog.message}</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmDialog(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black py-3.5 rounded-xl text-xs uppercase tracking-widest transition-colors">{t('btn_cancel') || 'Cancel'}</button>
+              <button onClick={() => setConfirmDialog(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black py-3.5 rounded-xl text-xs uppercase tracking-widest transition-colors">{safeTranslate('btn_cancel', 'Cancel', 'বাতিল', 'रद्द करें')}</button>
               <button onClick={confirmDialog.onConfirm} className={`flex-1 font-black py-3.5 rounded-xl text-xs uppercase tracking-widest text-white shadow-md transition-all hover:-translate-y-0.5 ${confirmDialog.isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
                 {confirmDialog.confirmText}
               </button>
@@ -702,20 +711,20 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       )}
 
       {/* HEADER */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-gray-100 pb-6 bg-white p-5 sm:p-6 rounded-3xl shadow-sm ring-1 ring-black/5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-gray-100 pb-6 bg-white p-5 sm:p-6 rounded-3xl shadow-sm ring-1 ring-black/5 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-black text-gray-900 flex items-center gap-3 tracking-tight">
-            <Users className="text-sanatani-orange" size={32} /> {institutionLabel} {t('nav_directory') || 'Devotee Directory & CRM'}
+            <Users className="text-sanatani-orange" size={32} /> {institutionLabel} {safeTranslate('nav_directory', 'Directory & CRM', 'ডিরেক্টরি', 'निर्देशिका')}
           </h2>
           <p className="text-xs text-gray-500 font-bold mt-1 uppercase tracking-widest">
-            {t('guest_crm_subtitle') || 'Manage your community network, view engagement scores, and export custom audiences.'}
+            {safeTranslate('guest_crm_subtitle', 'Manage your community network, view engagement scores, and export custom audiences.', 'আপনার কমিউনিটি নেটওয়ার্ক পরিচালনা করুন', 'अपने समुदाय नेटवर्क को प्रबंधित करें')}
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
           <div className="flex bg-gray-100 p-1.5 rounded-2xl shadow-inner border border-gray-200 w-full sm:w-auto overflow-x-auto">
             <button onClick={() => setShowGuide(!showGuide)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">
-              <HelpCircle size={14}/> {t('quick_guide') || 'Guide'}
+              <HelpCircle size={14}/> {safeTranslate('quick_guide', 'Guide', 'গাইড', 'गाइड')}
             </button>
             <button onClick={() => setViewMode('GRID')} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 whitespace-nowrap ${viewMode === 'GRID' ? 'bg-white text-sanatani-orange shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               <LayoutGrid size={14}/> Grid
@@ -728,10 +737,10 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
           {isAdmin && (
             <div className="flex gap-2 w-full sm:w-auto">
               <button onClick={() => {setShowImporter(true); setCsvPreview([]);}} className="flex-1 sm:flex-none bg-gray-900 hover:bg-black text-white px-5 py-3.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all hover:-translate-y-0.5 shrink-0">
-                <UploadCloud size={16}/> {t('bulk_csv_importer') || 'CSV Import'}
+                <UploadCloud size={16}/> {safeTranslate('bulk_csv_importer', 'CSV Import', 'CSV ইম্পোর্টার', 'बल्क CSV आयातक')}
               </button>
               <button onClick={() => setShowAddModal(true)} className="flex-1 sm:flex-none bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white px-5 py-3.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all hover:-translate-y-0.5 shrink-0">
-                <Plus size={16}/> Add {t('members') || 'Members'}
+                <Plus size={16}/> Add {safeTranslate(workspaceType === 'Goshala' ? 'gau_sevaks' : 'members', 'Members', 'সদস্যবৃন্দ', 'सदस्य')}
               </button>
             </div>
           )}
@@ -740,32 +749,32 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
       {/* QUICK GUIDE */}
       {showGuide && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-5 sm:p-6 rounded-2xl shadow-inner relative animate-in slide-in-from-top-2">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-5 sm:p-6 rounded-2xl shadow-inner relative animate-in slide-in-from-top-2 shrink-0">
           <button onClick={() => setShowGuide(false)} className="absolute top-4 right-4 text-blue-400 hover:text-blue-700 transition-colors"><X size={18}/></button>
           <h3 className="text-sm font-black text-blue-900 flex items-center gap-2 mb-3 uppercase tracking-widest"><Lightbulb size={18} className="text-blue-500"/> CRM Protocol</h3>
           <p className="text-xs font-bold text-gray-700 leading-relaxed mb-5 max-w-4xl">
-            This module replaces scattered Excel sheets. Tap any member to access their full "My Space" profile, view their Seva Index, assign roles, or generate their Digital Gate Pass.
+            This module replaces scattered Excel sheets. Tap any profile to access their full "My Space" interface, view their Seva Index, assign roles, or generate their Digital Gate Pass.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
              <div className="bg-white/80 p-4 rounded-xl border border-blue-100 flex items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
                <UploadCloud size={20} className="text-blue-500 shrink-0"/> 
                <div>
-                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-900 mb-0.5">{t('guide_devotee_step1_title') || 'Provision Profiles'}</p>
-                 <p className="text-[9px] font-bold text-gray-500 leading-tight">Use the Bulk CSV upload to instantly import paper registers.</p>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-900 mb-0.5">{safeTranslate('guide_devotee_step1_title', '1. Provision Profiles', '১. প্রোফাইল তৈরি করুন', '1. प्रोफाइल बनाएं')}</p>
+                 <p className="text-[9px] font-bold text-gray-500 leading-tight">{safeTranslate('guide_devotee_step1_desc', 'Add devotees to your digital workspace securely.', 'আপনার ডিজিটাল ওয়ার্কস্পেসে সদস্যদের যুক্ত করুন।', 'अपने डिजिटल कार्यक्षेत्र में सदस्यों को सुरक्षित रूप से जोड़ें।')}</p>
                </div>
              </div>
              <div className="bg-white/80 p-4 rounded-xl border border-blue-100 flex items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
                <Banknote size={20} className="text-blue-500 shrink-0"/> 
                <div>
-                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-900 mb-0.5">{t('guide_devotee_step2_title') || 'Log Chanda'}</p>
-                 <p className="text-[9px] font-bold text-gray-500 leading-tight">Click a profile to instantly log their monthly donation and generate a PDF.</p>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-900 mb-0.5">{safeTranslate('guide_devotee_step2_title', '2. Log Chanda', '২. তহবিল সংগ্রহ', '2. योगदान दर्ज करें')}</p>
+                 <p className="text-[9px] font-bold text-gray-500 leading-tight">{safeTranslate('guide_devotee_step2_desc', 'Record incoming donations directly to a member\'s profile.', 'সরাসরি একজন সদস্যের প্রোফাইলে চাঁদা বা দান লগ করুন।', 'सीधे सदस्य की प्रोफ़ाइल पर दान लॉग करें।')}</p>
                </div>
              </div>
              <div className="bg-white/80 p-4 rounded-xl border border-blue-100 flex items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
                <ShieldCheck size={20} className="text-blue-500 shrink-0"/> 
                <div>
-                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-900 mb-0.5">{t('guide_devotee_step3_title') || 'Admin Controls'}</p>
-                 <p className="text-[9px] font-bold text-gray-500 leading-tight">Assign Manager roles or reset forgotten auto-login PINs securely.</p>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-900 mb-0.5">{safeTranslate('guide_devotee_step3_title', '3. Admin Controls', '৩. অ্যাডমিন কন্ট্রোল', '3. व्यवस्थापक नियंत्रण')}</p>
+                 <p className="text-[9px] font-bold text-gray-500 leading-tight">{safeTranslate('guide_devotee_step3_desc', 'Assign roles, reset secure PINs, or update identity details.', 'ম্যানেজার/অ্যাডমিন রোল সেট করুন, পিন রিসেট করুন।', 'भूमिकाएं असाइन करें, सुरक्षित पिन रीसेट करें।')}</p>
                </div>
              </div>
           </div>
@@ -773,12 +782,12 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       )}
 
       {/* FILTERS */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50 p-3 rounded-2xl border border-gray-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50 p-3 rounded-2xl border border-gray-200 shadow-sm shrink-0">
         <div className="relative w-full sm:w-96">
           <Search size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <input 
             type="text" 
-            placeholder={t('search_directory') || "Search by name, phone, or gotra..."}
+            placeholder={safeTranslate('search_directory', "Search by name, phone, or gotra...", "ডিরেক্টরি খুঁজুন", "निर्देशिका खोजें")}
             value={searchTerm} 
             onChange={e => setSearchTerm(e.target.value)} 
             className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-sanatani-orange transition-colors shadow-sm"
@@ -793,7 +802,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
               onClick={() => setRoleFilter(role)}
               className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border shadow-sm ${roleFilter === role ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
             >
-              {role === 'ALL' ? (t('all') || 'All') : role}
+              {role === 'ALL' ? (safeTranslate('filter_all', 'All', 'সব', 'सभी')) : role}
             </button>
           ))}
         </div>
@@ -804,7 +813,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       {/* ========================================================================= */}
       {viewMode === 'GRID' && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 animate-in fade-in">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 animate-in fade-in flex-1">
             {currentDevotees.length > 0 ? (
               currentDevotees.map(m => {
                 const liveScore = calculateSevaScore(m.totalDonated, 0, m.attendanceCount); 
@@ -826,20 +835,20 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                           </div>
                         </div>
                         <span className={`text-[8px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm ${m.role === 'ADMIN' ? 'bg-red-50 text-red-700 border-red-200' : m.role === 'MANAGER' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                          Sys: {m.role || 'MEMBER'}
+                          {safeTranslate('sys_role', 'Sys', 'রোল', 'रोल')}: {m.role || 'MEMBER'}
                         </span>
                       </div>
 
                       <h3 className="text-lg font-black text-gray-900 truncate mb-1.5 group-hover:text-sanatani-orange transition-colors" title={m.name}>{m.name}</h3>
                       <div className="space-y-2 mb-4">
                         {m.phone && <p className="text-[11px] font-bold text-gray-500 flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-md border border-gray-100 w-fit"><Phone size={12} className="text-gray-400"/> {m.phone}</p>}
-                        {m.gotra && <p className="text-[11px] font-bold text-gray-500 flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-md border border-gray-100 w-fit"><ShieldCheck size={12} className="text-gray-400"/> Gotra: {m.gotra}</p>}
+                        {m.gotra && <p className="text-[11px] font-bold text-gray-500 flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-md border border-gray-100 w-fit"><ShieldCheck size={12} className="text-gray-400"/> {safeTranslate('gotra', 'Gotra', 'গোত্র', 'गोत्र')}: {m.gotra}</p>}
                       </div>
                     </div>
 
                     <div className="pt-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50 -mx-6 -mb-6 px-6 py-4 group-hover:bg-orange-50/30 transition-colors">
                       <div className="min-w-0">
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 truncate">Lifetime {t('funds') || 'Funds'}</p>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 truncate">Lifetime {safeTranslate('funds', 'Funds', 'তহবিল', 'निधि')}</p>
                         <p className="text-xl font-black text-green-600 tracking-tight truncate">{curSymbol}{(m.totalDonated || 0).toLocaleString()}</p>
                       </div>
                       <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 shadow-sm shrink-0" title="Event Attendance Count">
@@ -852,16 +861,16 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
             ) : (
               <div className="col-span-full py-20 text-center text-gray-400 font-bold bg-white rounded-3xl border border-dashed border-gray-300 shadow-sm">
                 <Users size={48} className="mx-auto mb-4 opacity-20 text-sanatani-orange"/>
-                <p className="text-xl font-black text-gray-800 mb-1">{t('no_data_found') || 'No devotees found.'}</p>
-                <p className="text-xs uppercase tracking-widest">{t('adjust_filters') || 'Adjust filters or provision a new profile.'}</p>
+                <p className="text-xl font-black text-gray-800 mb-1">{safeTranslate('no_data_found', 'No data found.', 'কোনো ডেটা পাওয়া যায়নি', 'कोई डेटा नहीं मिला')}</p>
+                <p className="text-xs uppercase tracking-widest">{safeTranslate('adjust_filters', 'Adjust filters to see results', 'ফলাফল দেখতে ফিল্টার পরিবর্তন করুন', 'परिणाम देखने के लिए फ़िल्टर बदलें')}</p>
               </div>
             )}
           </div>
 
           {/* PAGINATION */}
           {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 shadow-sm mt-6">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-2 mb-4 sm:mb-0">Page {currentPage} of {totalPages}</p>
+            <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 shadow-sm mt-6 shrink-0">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-2 mb-4 sm:mb-0">{safeTranslate('page', 'Page', 'পৃষ্ঠা', 'पृष्ठ')} {currentPage} of {totalPages}</p>
               <div className="flex items-center gap-2">
                 <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all"><ChevronLeft size={20}/></button>
                 <div className="flex gap-1 hidden sm:flex">
@@ -888,17 +897,17 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       {/* VIEW 2: TABLE MODE                                                        */}
       {/* ========================================================================= */}
       {viewMode === 'TABLE' && (
-        <div className="bg-white border border-gray-200 rounded-3xl shadow-sm overflow-hidden animate-in fade-in">
-          <div className="overflow-x-auto">
+        <div className="bg-white border border-gray-200 rounded-3xl shadow-sm overflow-hidden animate-in fade-in flex-1 flex flex-col">
+          <div className="overflow-x-auto flex-1">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                  <th className="p-4 pl-6">Devotee Name</th>
-                  <th className="p-4">Contact & Location</th>
-                  <th className="p-4">Gotra & Identity</th>
-                  <th className="p-4">System Role</th>
-                  <th className="p-4 text-right">Lifetime Donated</th>
-                  <th className="p-4 pr-6 text-center">Profile</th>
+                  <th className="p-4 pl-6">{safeTranslate('full_name', 'Full Name', 'সম্পূর্ণ নাম', 'पूरा नाम')}</th>
+                  <th className="p-4">{safeTranslate('contact_geo', 'Contact & Location', 'যোগাযোগ ও ভৌগলিক তথ্য', 'संपर्क और भौगोलिक जानकारी')}</th>
+                  <th className="p-4">{safeTranslate('gotra_lineage', 'Gotra Lineage', 'গোত্র', 'गोत्र')} & Identity</th>
+                  <th className="p-4">{safeTranslate('sys_role', 'System Role', 'সিস্টেম অ্যাক্সেস রোল', 'सिस्टम एक्सेस रोल')}</th>
+                  <th className="p-4 text-right">{safeTranslate('lifetime_donated', 'Lifetime Donated', 'মোট অনুদান', 'कुल दान')}</th>
+                  <th className="p-4 pr-6 text-center">{safeTranslate('my_profile', 'Profile', 'আমার প্রোফাইল', 'मेरी प्रोफ़ाइल')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
@@ -942,7 +951,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                 ) : (
                   <tr>
                     <td colSpan="6" className="p-16 text-center text-gray-400 font-bold uppercase tracking-widest text-xs border-b border-gray-100">
-                      No records match the selected filters.
+                      {safeTranslate('no_data_found', 'No records match the selected filters.')}
                     </td>
                   </tr>
                 )}
@@ -952,8 +961,8 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
           {/* TABLE PAGINATION */}
           {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row justify-between items-center p-4 bg-gray-50/50">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-2 mb-4 sm:mb-0">Page {currentPage} of {totalPages}</p>
+            <div className="flex flex-col sm:flex-row justify-between items-center p-4 bg-gray-50/50 shrink-0 border-t border-gray-200">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-2 mb-4 sm:mb-0">{safeTranslate('page', 'Page', 'পৃষ্ঠা', 'पृष्ठ')} {currentPage} of {totalPages}</p>
               <div className="flex items-center gap-2">
                 <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all shadow-sm"><ChevronLeft size={20}/></button>
                 <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all shadow-sm"><ChevronRight size={20}/></button>
@@ -1004,12 +1013,12 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                    <h2 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight mb-2 whitespace-normal break-words">{activeMember.name || 'Unnamed Profile'}</h2>
                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                      <span className="text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest bg-gray-100 text-gray-700 border border-gray-200">
-                        {activeMember.designation ? activeMember.designation : t('members')}
+                        {activeMember.designation ? activeMember.designation : safeTranslate('members', 'Member', 'সদস্য', 'सदस्य')}
                      </span>
                      <span className="text-[10px] text-gray-500 font-mono font-bold tracking-wider px-2 py-1 bg-white border border-gray-200 rounded-md shadow-sm">ID: {activeMember.id}</span>
                      {activeMember.phone && (
                        <a href={`https://wa.me/${activeMember.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Namaskar ${activeMember.name} 🙏,\n\nMessage from ${session.communityName}:`)}`} target="_blank" rel="noreferrer" className="hidden sm:flex bg-[#25D366] hover:bg-[#1da851] text-white font-black py-1.5 px-3 rounded-md text-[9px] uppercase tracking-widest items-center gap-1 shadow-sm transition-all ml-auto">
-                         <MessageSquare size={12}/> {t('msg_whatsapp')}
+                         <MessageSquare size={12}/> {safeTranslate('msg_whatsapp', 'WhatsApp', 'হোয়াটসঅ্যাপ', 'व्हाट्सएप')}
                        </a>
                      )}
                    </div>
@@ -1018,16 +1027,16 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
                {/* TAB NAVIGATION */}
                <div className="flex items-center justify-start gap-4 sm:gap-6 pt-2 overflow-x-auto scrollbar-hide w-full px-2 sm:px-0">
-                  <button onClick={()=>setProfileTab('PASS')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap flex items-center gap-1.5 ${profileTab === 'PASS' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-700'}`}><Ticket size={14} className="mb-0.5"/> Gate Pass</button>
-                  <button onClick={()=>setProfileTab('IDENTITY')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap ${profileTab === 'IDENTITY' ? 'text-sanatani-orange border-b-2 border-sanatani-orange' : 'text-gray-400 hover:text-gray-700'}`}>{t('identity_tab') || 'Identity'}</button>
-                  <button onClick={()=>setProfileTab('ACTIVITY')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap ${profileTab === 'ACTIVITY' ? 'text-sanatani-orange border-b-2 border-sanatani-orange' : 'text-gray-400 hover:text-gray-700'}`}>{t('activity_tab') || 'Activity'}</button>
-                  
+                  <button onClick={()=>setProfileTab('PASS')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap flex items-center gap-1.5 ${profileTab === 'PASS' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-700'}`}><Ticket size={14} className="mb-0.5"/> {safeTranslate('gate_pass', 'Gate Pass', 'গেট পাস', 'गेट पास')}</button>
+                  <button onClick={()=>setProfileTab('IDENTITY')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap ${profileTab === 'IDENTITY' ? 'text-sanatani-orange border-b-2 border-sanatani-orange' : 'text-gray-400 hover:text-gray-700'}`}>{safeTranslate('identity_tab', 'Identity', 'পরিচয়', 'पहचान')}</button>
+                  <button onClick={()=>setProfileTab('ACTIVITY')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap ${profileTab === 'ACTIVITY' ? 'text-sanatani-orange border-b-2 border-sanatani-orange' : 'text-gray-400 hover:text-gray-700'}`}>{safeTranslate('activity_tab', 'Activity', 'অ্যাক্টিভিটি', 'गतिविधि')}</button>
+
                   {/* ADMINS CAN SEE VEDIC HUB FOR OTHER USERS TO MANAGE MATRIMONIAL/PUROHIT STATUS */}
                   {(isAdmin || session.role === 'MANAGER') && (
-                    <button onClick={()=>setProfileTab('GLOBAL')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap flex items-center gap-1.5 ${profileTab === 'GLOBAL' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-400 hover:text-gray-700'}`}><Globe2 size={14} className="mb-0.5"/> Vedic Hub</button>
+                    <button onClick={()=>setProfileTab('GLOBAL')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap flex items-center gap-1.5 ${profileTab === 'GLOBAL' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-400 hover:text-gray-700'}`}><Globe2 size={14} className="mb-0.5"/> {safeTranslate('vedic_hub', 'Vedic Hub', 'বেদিক হাব', 'वैदिक हब')}</button>
                   )}
 
-                  {(isAdmin || session.uid === activeMember.id) && <button onClick={()=>setProfileTab('SECURITY')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap ${profileTab === 'SECURITY' ? 'text-red-500 border-b-2 border-red-500' : 'text-gray-400 hover:text-gray-700'}`}>{t('security_tab') || 'Security'}</button>}
+                  {(isAdmin || session.uid === activeMember.id) && <button onClick={()=>setProfileTab('SECURITY')} className={`pb-3 text-[11px] sm:text-xs font-black uppercase tracking-widest transition-colors whitespace-nowrap ${profileTab === 'SECURITY' ? 'text-red-500 border-b-2 border-red-500' : 'text-gray-400 hover:text-gray-700'}`}>{safeTranslate('security_tab', 'Security', 'নিরাপত্তা', 'सुरक्षा')}</button>}
                </div>
             </div>
 
@@ -1075,60 +1084,60 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                        target="_blank" rel="noreferrer"
                        className="sm:hidden w-full bg-[#25D366] hover:bg-[#1da851] text-white font-black py-4 rounded-xl text-xs uppercase tracking-widest flex justify-center items-center gap-2 shadow-md transition-all"
                      >
-                       <MessageSquare size={16}/> {t('msg_whatsapp')}
+                       <MessageSquare size={16}/> {safeTranslate('msg_whatsapp', 'WhatsApp', 'হোয়াটসঅ্যাপ', 'व्हाट्सएप')}
                      </a>
                   )}
 
                   <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
                     <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 flex justify-between items-center">
-                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><MapPin size={14}/> {t('contact_geo') || 'Contact & Geo'}</span>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><MapPin size={14}/> {safeTranslate('contact_geo', 'Contact & Geo', 'যোগাযোগ ও ভৌগলিক তথ্য', 'संपर्क और भौगोलिक जानकारी')}</span>
                     </div>
                     <div className="divide-y divide-gray-100">
 
                       <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
-                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('full_name')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><User size={14} className="text-gray-400 shrink-0"/> {activeMember.name}</p></div>
-                        {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('name', t('full_name') || 'Full Name')} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
+                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('full_name', 'Full Name', 'সম্পূর্ণ নাম', 'पूरा नाम')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><User size={14} className="text-gray-400 shrink-0"/> {activeMember.name}</p></div>
+                        {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('name', safeTranslate('full_name', 'Full Name', 'সম্পূর্ণ নাম', 'पूरा नाम'))} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
                       </div>
 
                       <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0 bg-gray-50/50">
-                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('phone_number')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><Phone size={14} className="text-gray-400 shrink-0"/> {activeMember.phone || 'N/A'}</p></div>
+                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('phone_number', 'Phone Number', 'ফোন নম্বর', 'फ़ोन नंबर')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><Phone size={14} className="text-gray-400 shrink-0"/> {activeMember.phone || 'N/A'}</p></div>
                         <Lock size={16} className="text-gray-300 shrink-0 ml-2" title="Contact Admin to update secure login identity."/>
                       </div>
 
                       <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0 bg-gray-50/50">
-                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('email')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><Mail size={14} className="text-gray-400 shrink-0"/> {activeMember.email || 'N/A'}</p></div>
+                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('email', 'Email Address', 'ইমেইল', 'ईमेल')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><Mail size={14} className="text-gray-400 shrink-0"/> {activeMember.email || 'N/A'}</p></div>
                         <Lock size={16} className="text-gray-300 shrink-0 ml-2" title="Contact Admin to update secure login identity."/>
                       </div>
 
                       <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
-                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('nid')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><CreditCard size={14} className="text-gray-400 shrink-0"/> {activeMember.nid || t('not_provided')}</p></div>
-                        {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('nid', t('nid') || 'National ID')} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
+                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('nid', 'Govt ID / NID', 'জাতীয় পরিচয়পত্র', 'राष्ट्रीय पहचान पत्र')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><CreditCard size={14} className="text-gray-400 shrink-0"/> {activeMember.nid || safeTranslate('not_provided', 'Not Provided', 'দেওয়া হয়নি', 'उपलब्ध नहीं है')}</p></div>
+                        {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('nid', safeTranslate('nid', 'Govt ID / NID', 'জাতীয় পরিচয়পত্র', 'राष्ट्रीय पहचान पत्र'))} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
                       </div>
 
                       <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
-                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('full_address')}</p><p className="text-sm font-black text-gray-900 flex items-start gap-2 max-w-lg leading-snug"><MapPin size={14} className="text-gray-400 shrink-0 mt-0.5"/> <span className="break-words">{activeMember.address || t('not_provided')}</span></p></div>
-                        {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('address', t('full_address') || 'Full Address')} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
+                        <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('full_address', 'Full Address', 'সম্পূর্ণ ঠিকানা', 'पूरा पता')}</p><p className="text-sm font-black text-gray-900 flex items-start gap-2 max-w-lg leading-snug"><MapPin size={14} className="text-gray-400 shrink-0 mt-0.5"/> <span className="break-words">{activeMember.address || safeTranslate('not_provided', 'Not Provided', 'দেওয়া হয়নি', 'उपलब्ध नहीं है')}</span></p></div>
+                        {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('address', safeTranslate('full_address', 'Full Address', 'সম্পূর্ণ ঠিকানা', 'पूरा पता'))} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
                       </div>
 
                       <div className="grid grid-cols-2 divide-x divide-gray-100">
                         <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
-                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('blood_group')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><Droplet size={14} className="text-red-400 shrink-0"/> {activeMember.bloodGroup || 'N/A'}</p></div>
-                          {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('bloodGroup', t('blood_group') || 'Blood Group')} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors"><Edit size={12}/></button>}
+                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('blood_group', 'Blood Group', 'রক্তের গ্রুপ', 'रक्त समूह')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><Droplet size={14} className="text-red-400 shrink-0"/> {activeMember.bloodGroup || 'N/A'}</p></div>
+                          {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('bloodGroup', safeTranslate('blood_group', 'Blood Group', 'রক্তের গ্রুপ', 'रक्त समूह'))} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors"><Edit size={12}/></button>}
                         </div>
-                        <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
-                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('country')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><Globe2 size={14} className="text-blue-400 shrink-0"/> {activeMember.country || 'N/A'}</p></div>
-                          {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('country', t('country') || 'Country')} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors"><Edit size={12}/></button>}
+                        <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0 bg-gray-50/50">
+                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('country', 'Country', 'দেশ', 'देश')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><Globe2 size={14} className="text-blue-400 shrink-0"/> {activeMember.country || 'N/A'}</p></div>
+                          <Lock size={14} className="text-gray-300 shrink-0 ml-2" title="Contact Master Support to migrate workspace region."/>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 divide-x divide-gray-100">
                         <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
-                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('gotra_lineage')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><ShieldCheck size={14} className="text-purple-400 shrink-0"/> {activeMember.gotra || 'N/A'}</p></div>
-                          {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('gotra', t('gotra_lineage') || 'Gotra Lineage')} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors"><Edit size={12}/></button>}
+                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('gotra_lineage', 'Gotra Lineage', 'গোত্র', 'गोत्र')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><ShieldCheck size={14} className="text-purple-400 shrink-0"/> {activeMember.gotra || 'N/A'}</p></div>
+                          {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('gotra', safeTranslate('gotra_lineage', 'Gotra Lineage', 'গোত্র', 'गोत्र'))} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors"><Edit size={12}/></button>}
                         </div>
                         <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
-                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('cultural_desig')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><Award size={14} className="text-yellow-500 shrink-0"/> {activeMember.designation || 'Member'}</p></div>
-                          {isAdmin && <button onClick={() => handleEditField('designation', t('cultural_desig') || 'Designation')} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors"><Edit size={12}/></button>}
+                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('cultural_desig', 'Designation', 'পদবী', 'पदनाम')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><Award size={14} className="text-yellow-500 shrink-0"/> {activeMember.designation || 'Member'}</p></div>
+                          {isAdmin && <button onClick={() => handleEditField('designation', safeTranslate('cultural_desig', 'Designation', 'পদবী', 'पदनाम'))} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors"><Edit size={12}/></button>}
                         </div>
                       </div>
 
@@ -1151,11 +1160,11 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                               {halo.icon || <Award size={28}/>}
                             </div>
                             <div className="flex-1 text-center md:text-left">
-                              <h3 className="text-lg font-black text-gray-900 mb-1">{t('seva_index') || 'Seva Index Score'}: <span className="text-sanatani-orange">{score}</span></h3>
-                              <p className="text-xs font-bold text-gray-500">{t('seva_desc') || 'Current Devotee Rank:'} <strong className="text-gray-800">{halo.name}</strong></p>
+                              <h3 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('seva_index', 'Seva Index Score', 'সেবা সূচক', 'सेवा सूचकांक')}: <span className="text-sanatani-orange">{score}</span></h3>
+                              <p className="text-xs font-bold text-gray-500">{safeTranslate('seva_desc', 'Current Devotee Rank:', 'আপনার বর্তমান র‍্যাঙ্ক হলো', 'आपकी वर्तमान रैंक है')} <strong className="text-gray-800">{halo.name}</strong></p>
                               {activeMember.attendanceCount > 0 && (
                                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-2 bg-emerald-50 px-3 py-1.5 rounded-full inline-flex items-center gap-1.5 border border-emerald-100 shadow-sm">
-                                  <Flame size={12}/> {activeMember.attendanceCount} Events Attended
+                                  <Flame size={12}/> {activeMember.attendanceCount} {safeTranslate('events_attended', 'Events Attended', 'ইভেন্টে অংশগ্রহণ করেছেন', 'इवेंट में भाग लिया')}
                                 </p>
                               )}
                             </div>
@@ -1167,12 +1176,12 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                   <div className="bg-white border border-green-200 rounded-3xl p-6 flex flex-col sm:flex-row justify-between items-center gap-6 shadow-sm relative overflow-hidden">
                      <div className="absolute top-0 right-0 -mt-6 -mr-6 opacity-5 pointer-events-none"><Banknote size={120} className="text-green-600"/></div>
                      <div className="text-center sm:text-left relative z-10">
-                       <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-1.5 flex items-center justify-center sm:justify-start gap-1.5"><Banknote size={14}/> Lifetime {t('funds') || 'Donated'}</p>
+                       <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-1.5 flex items-center justify-center sm:justify-start gap-1.5"><Banknote size={14}/> {safeTranslate('lifetime_donated', 'Lifetime Donated', 'মোট অনুদান', 'कुल दान')}</p>
                        <p className="text-4xl font-black text-green-600 tracking-tight">{curSymbol}{(activeMember.totalDonated || 0).toLocaleString()}</p>
                      </div>
                      {(session.role === 'ADMIN' || session.role === 'MANAGER') && (
                        <button onClick={() => setShowChandaForm(!showChandaForm)} className={`w-full sm:w-auto text-white font-black px-6 py-4 rounded-xl text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2 relative z-10 ${showChandaForm ? 'bg-gray-900 hover:bg-black' : 'bg-green-600 hover:bg-green-700 hover:-translate-y-0.5'}`}>
-                         {showChandaForm ? <X size={16}/> : <Plus size={16}/>} {t('btn_log_chanda') || 'Record Chanda'}
+                         {showChandaForm ? <X size={16}/> : <Plus size={16}/>} {safeTranslate('btn_record_chanda', 'Record Income', 'আয় রেকর্ড করুন', 'आय दर्ज करें')}
                        </button>
                      )}
                   </div>
@@ -1182,28 +1191,28 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                         <div className="absolute top-0 left-0 w-full h-1 bg-green-500"></div>
                         <div className="flex flex-col sm:flex-row gap-4 mb-4">
                           <div className="flex-1">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{t('amount_bdt') || 'Amount'} ({curSymbol})</label>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{safeTranslate('amount_bdt', 'Amount (৳)', 'পরিমাণ (৳)', 'राशि (৳)')} ({curSymbol})</label>
                             <input type="number" required value={chandaData.amount} onChange={e=>setChandaData({...chandaData, amount: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none text-lg font-black text-green-700 focus:bg-white focus:border-green-500 focus:ring-4 focus:ring-green-50 transition-all shadow-sm" />
                           </div>
                           <div className="flex-1">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{t('payment_method') || 'Payment Method'}</label>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{safeTranslate('payment_method', 'Payment Method', 'পেমেন্ট মাধ্যম', 'भुगतान विधि')}</label>
                             <select value={chandaData.paymentMethod} onChange={e=>setChandaData({...chandaData, paymentMethod: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm font-bold focus:bg-white focus:border-green-500 transition-all shadow-sm cursor-pointer appearance-none">
-                              <option value="CASH">Cash</option>
-                              <option value="BANK_TRANSFER">Bank Transfer</option>
-                              <option value="MOBILE_BANKING">Mobile Banking</option>
-                              <option value="CHEQUE">Cheque</option>
+                              <option value="CASH">{safeTranslate('cash', 'CASH', 'নগদ', 'नकद')}</option>
+                              <option value="BANK_TRANSFER">{safeTranslate('bank_transfer', 'BANK TRANSFER', 'ব্যাংক ট্রান্সফার', 'बैंक ट्रांसफर')}</option>
+                              <option value="MOBILE_BANKING">{safeTranslate('mobile_banking', 'MOBILE BANKING', 'মোবাইল ব্যাংকিং', 'मोबाइल बैंकिंग')}</option>
+                              <option value="CHEQUE">CHEQUE</option>
                             </select>
                           </div>
                         </div>
 
                         <div className="flex flex-col sm:flex-row gap-4 mb-6 relative">
                           <div className="flex-[2]">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{t('note_optional') || 'Note / Purpose'}</label>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{safeTranslate('note_optional', 'Note (Optional)', 'বিবরণ (ঐচ্ছিক)', 'विवरण (वैकल्पिक)')}</label>
                             <input type="text" value={chandaData.note} onChange={e=>setChandaData({...chandaData, note: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm font-bold focus:bg-white focus:border-green-500 transition-all shadow-sm" placeholder="e.g. Monthly Seva" />
                           </div>
 
                           <div className="flex-1 relative">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{t('handled_by') || 'Handled By'}</label>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{safeTranslate('handled_by', 'Handled By', 'সংগ্রহকারী', 'संग्रहकर्ता')} *</label>
                             <input 
                               type="text" required 
                               value={chandaData.handledBy} 
@@ -1243,7 +1252,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                   {/* FILTER BAR FOR TRANSACTIONS */}
                   <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
                     <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 flex flex-col gap-3">
-                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><Filter size={14}/> {t('filters') || 'Filters'}</span>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><Filter size={14}/> {safeTranslate('filters', 'Filters', 'ফিল্টার করুন', 'फ़िल्टर')}</span>
 
                       <div className="grid grid-cols-2 md:flex md:flex-row items-center gap-3 w-full">
                         <select 
@@ -1251,9 +1260,9 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                           onChange={e => setActivityFilterType(e.target.value)}
                           className="col-span-2 md:col-span-1 p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none cursor-pointer shadow-sm transition-colors focus:border-sanatani-orange"
                         >
-                          <option value="ALL">{t('filter_all') || 'All Activity'}</option>
-                          <option value="INCOME">{t('filter_income') || 'Income Only'}</option>
-                          <option value="EXPENSE">{t('filter_expense') || 'Expense Only'}</option>
+                          <option value="ALL">{safeTranslate('filter_all', 'All Activities', 'সকল লেনদেন', 'सभी गतिविधियां')}</option>
+                          <option value="INCOME">{safeTranslate('filter_income', 'Income Only', 'শুধুমাত্র আয়', 'केवल आय')}</option>
+                          <option value="EXPENSE">{safeTranslate('filter_expense', 'Expenses Only', 'শুধুমাত্র ব্যয়', 'केवल व्यय')}</option>
                         </select>
 
                         <div className="col-span-2 md:w-auto flex items-center bg-white border border-gray-200 p-1.5 rounded-xl shadow-sm overflow-x-auto">
@@ -1273,7 +1282,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                            {filteredTransactions.map(tr => (
                              <div key={tr.id} className="p-4 bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm rounded-2xl transition-all flex justify-between items-center group min-w-0">
                                <div className="min-w-0 pr-4">
-                                 <p className="text-sm font-black text-gray-900 truncate">{tr.note || 'General Donation'}</p>
+                                 <p className="text-sm font-black text-gray-900 truncate">{tr.note || safeTranslate('general_donation', 'General Donation', 'সাধারণ অনুদান', 'सामान्य दान')}</p>
                                  <p className="text-[10px] font-bold text-gray-400 tracking-wider mt-1">{new Date(tr.timestamp).toLocaleString()}</p>
                                </div>
 
@@ -1282,7 +1291,15 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                                    <p className={`text-base font-black ${tr.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>{tr.amount >= 0 ? '+' : ''}{curSymbol}{Math.abs(tr.amount)}</p>
                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">By {tr.collector?.split(' ')[0] || 'System'}</p>
                                  </div>
-                                 <button onClick={(e) => { e.stopPropagation(); handleDownloadReceipt(tr); }} className="text-gray-500 hover:text-sanatani-orange hover:bg-orange-50 p-2.5 rounded-xl border border-transparent hover:border-orange-200 transition-all shadow-sm" title="Download Receipt">
+                                 <button onClick={(e) => { e.stopPropagation(); 
+                                     const type = tr.amount >= 0 ? 'INCOME' : 'EXPENSE';
+                                     pushToDataLayer('download_receipt', { transaction_id: tr.id, transaction_type: type, value: Math.abs(tr.amount) });
+                                     try {
+                                       import('../utils/pdfGenerator').then(({ generateReceiptPdf }) => {
+                                          generateReceiptPdf(activeSession.communityName, tr, type);
+                                       });
+                                     } catch (err) { showToast(safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') + ": " + err.message, "error"); }
+                                  }} className="text-gray-500 hover:text-sanatani-orange hover:bg-orange-50 p-2.5 rounded-xl border border-transparent hover:border-orange-200 transition-all shadow-sm" title={safeTranslate('download_receipt', 'Download Receipt', 'রসিদ ডাউনলোড করুন', 'रसीद डाउनलोड करें')}>
                                    <FileDigit size={16}/>
                                  </button>
                                </div>
@@ -1293,7 +1310,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                        ) : (
                          <div className="py-12 text-center text-gray-400">
                            <History size={32} className="mx-auto mb-3 opacity-20"/>
-                           <p className="text-xs font-bold uppercase tracking-widest">{t('no_matching_activities') || 'No matching activities found.'}</p>
+                           <p className="text-xs font-bold uppercase tracking-widest">{safeTranslate('no_matching_activities', 'No activities found.', 'কোনো লেনদেন পাওয়া যায়নি।', 'कोई रिकॉर्ड नहीं मिला।')}</p>
                          </div>
                        )}
                     </div>
@@ -1304,19 +1321,19 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
               {/* ✨ TAB 3: THE VEDIC HUB (GLOBAL ACCOUNTS - ADMIN VIEW) */}
               {profileTab === 'GLOBAL' && (isAdmin || session.role === 'MANAGER') && (
                 <div className="space-y-6 animate-in fade-in">
-                  
+
                   {/* VIVAH BANDHAN MATRIMONIAL WIDGET */}
                   <div className="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden flex flex-col sm:flex-row items-center sm:items-start gap-6">
                     <div className="absolute top-0 right-0 -mt-6 -mr-6 opacity-10 pointer-events-none">
                        <Heart size={150} className="text-pink-500 fill-current"/>
                     </div>
-                    
+
                     <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-md border border-pink-100 shrink-0 relative z-10">
                       <HeartHandshake size={32} className="text-pink-600"/>
                     </div>
 
                     <div className="flex-1 text-center sm:text-left relative z-10">
-                      <h4 className="text-lg font-black text-gray-900 mb-1">{t('vivah_title') || 'Vivah Bandhan Matrimonial'}</h4>
+                      <h4 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('vivah_title', 'Vivah Bandhan Matrimonial', 'বিবাহ বন্ধন ম্যাট্রিমোনিয়াল', 'विवाह बंधन मैट्रिमोनियल')}</h4>
                       <p className="text-xs font-bold text-gray-600 mb-4 max-w-sm leading-relaxed">
                         Manage this devotee's matrimonial identity and assist them with finding verified matches within the Sanatan community.
                       </p>
@@ -1334,13 +1351,13 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                     <div className="absolute top-0 right-0 -mt-6 -mr-6 opacity-10 pointer-events-none">
                        <Flame size={150} className="text-orange-500 fill-current"/>
                     </div>
-                    
+
                     <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-md border border-orange-100 shrink-0 relative z-10">
                       <Sparkles size={32} className="text-sanatani-orange"/>
                     </div>
 
                     <div className="flex-1 text-center sm:text-left relative z-10">
-                      <h4 className="text-lg font-black text-gray-900 mb-1">Global Purohit Registry</h4>
+                      <h4 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('global_purohit_registry', 'Global Purohit Registry', 'গ্লোবাল পুরোহিত রেজিস্ট্রি', 'ग्लोबल पुरोहित निर्देशिका')}</h4>
                       <p className="text-xs font-bold text-gray-600 mb-4 max-w-sm leading-relaxed">
                         Verify if this devotee is a registered Acharya, Pandit, or Vedic Scholar on the global network.
                       </p>
@@ -1379,20 +1396,20 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                      )}
 
                      <div className="flex flex-col justify-center w-full">
-                        <h3 className="text-lg font-black text-gray-900 mb-1">Account Recovery QR</h3>
-                        <p className="text-xs font-bold text-gray-500 mb-4 max-w-sm mx-auto sm:mx-0">Download or scan this to automatically log back into the workspace if the PIN is forgotten.</p>
+                        <h3 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('account_recovery_qr', 'Account Recovery QR', 'অ্যাকাউন্ট রিকভারি QR', 'खाता पुनर्प्राप्ति QR')}</h3>
+                        <p className="text-xs font-bold text-gray-500 mb-4 max-w-sm mx-auto sm:mx-0">{safeTranslate('qr_recovery_desc', 'Download or scan this to automatically log back into the workspace if the PIN is forgotten.', 'আপনার পিন ভুলে গেলে স্বয়ংক্রিয়ভাবে লগ ইন করতে এটি ডাউনলোড বা স্ক্যান করুন।', 'यदि आप अपना पिन भूल जाते हैं तो स्वचालित रूप से लॉग इन करने के लिए इसे डाउनलोड या स्कैन करें।')}</p>
 
                         <p className="text-[10px] font-bold text-red-500 mb-6 bg-red-50 p-3 rounded-xl border border-red-100 text-left flex items-start gap-2 leading-relaxed">
                           <AlertTriangle size={16} className="shrink-0 mt-0.5"/> 
-                          WARNING: This QR code contains the secure PIN. Do not show this to volunteers at the gate. Use the "Gate Pass" tab instead.
+                          {safeTranslate('qr_warning', 'WARNING: This QR code contains your secure PIN. Do not show this to volunteers at the gate. Use the "Gate Pass" tab instead.', 'সতর্কতা: এই QR কোডে আপনার পিন রয়েছে। এটি গেটে স্বেচ্ছাসেবকদের দেখাবেন না।', 'चेतावनी: इस QR कोड में आपका पिन है। इसे गेट पर न दिखाएं।')}
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-3 w-full">
                            <button onClick={() => { setShowQR(!showQR); pushToDataLayer('view_personal_qr', { community_id: session.communityId }); }} className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-black py-3.5 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-sm">
-                             {showQR ? t('hide_qr') || 'Hide QR' : t('view_qr') || 'View QR'}
+                             {showQR ? safeTranslate('hide_qr', 'Hide QR', 'QR লুকান', 'QR छिपाएं') : safeTranslate('view_qr', 'View QR', 'QR দেখুন', 'QR देखें')}
                            </button>
                            <button onClick={handleViewOrGeneratePin} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 rounded-xl text-[10px] uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5">
-                             <Download size={14}/> {t('download_pdf_card') || 'Download PDF Card'}
+                             <Download size={14}/> {safeTranslate('download_pdf_card', 'Download PDF Card', 'PDF ডাউনলোড করুন', 'PDF डाउनलोड करें')}
                            </button>
                         </div>
                      </div>
@@ -1401,25 +1418,25 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                   {isAdmin && (
                     <div className="border border-red-100 bg-red-50/50 rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-                      <p className="text-[10px] font-black text-red-600 flex items-center gap-2 uppercase tracking-widest mb-6 border-b border-red-100 pb-3"><ShieldAlert size={16}/> {t('admin_controls') || 'Admin Controls'}</p>
+                      <p className="text-[10px] font-black text-red-600 flex items-center gap-2 uppercase tracking-widest mb-6 border-b border-red-100 pb-3"><ShieldAlert size={16}/> {safeTranslate('admin_controls', 'Admin Controls', 'অ্যাডমিন কন্ট্রোল', 'व्यवस्थापक नियंत्रण')}</p>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                         <button onClick={handleViewOrGeneratePin} className="bg-gray-900 hover:bg-black text-white font-black py-4 rounded-xl text-[10px] uppercase tracking-widest flex justify-center items-center gap-2 shadow-md transition-all hover:-translate-y-0.5">
-                          <Key size={14}/> {t('reset_pin') || 'Reset Secure PIN'}
+                          <Key size={14}/> {safeTranslate('reset_pin', 'Reset Secure PIN', 'নিরাপদ পিন রিসেট করুন', 'सुरक्षित पिन रीसेट करें')}
                         </button>
                         {activeMember.role === 'MANAGER' ? (
                           <button onClick={() => handleRoleChange('MEMBER')} className="bg-white border border-gray-200 text-gray-700 hover:border-gray-400 hover:bg-gray-50 font-black py-4 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-sm hover:-translate-y-0.5">
-                            {t('demote_member') || 'Demote to Member'}
+                            {safeTranslate('demote_member', 'Demote to Member', 'সদস্য হিসেবে ডিমোট করুন', 'सदस्य के रूप में डिमोट करें')}
                           </button>
                         ) : (
                           <button onClick={() => handleRoleChange('MANAGER')} className="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 text-sanatani-orange hover:from-orange-100 hover:to-red-100 font-black py-4 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-sm hover:-translate-y-0.5">
-                            {t('promote_manager') || 'Promote to Manager'}
+                            {safeTranslate('promote_manager', 'Promote to Manager', 'ম্যানেজার হিসেবে প্রমোট করুন', 'प्रबंधक के रूप में प्रमोट करें')}
                           </button>
                         )}
                       </div>
 
                       <button onClick={handleDeleteMember} className="w-full bg-white border border-red-200 text-red-600 hover:bg-red-600 hover:text-white font-black py-4 rounded-xl text-[10px] uppercase tracking-widest flex justify-center items-center gap-2 transition-all shadow-sm hover:-translate-y-0.5 mt-2">
-                        <Trash2 size={16}/> {t('delete_record') || 'Erase Devotee Record'}
+                        <Trash2 size={16}/> {safeTranslate('delete_record', 'Erase Devotee Record', 'রেকর্ড স্থায়ীভাবে মুছুন', 'रिकॉर्ड स्थायी रूप से मिटाएं')}
                       </button>
                     </div>
                   )}
@@ -1459,9 +1476,9 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
               )}
 
               <div className="flex gap-3 mt-8">
-                 <button onClick={() => setEditModal(null)} className="flex-1 px-4 py-3.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-sm">{t('btn_cancel')}</button>
+                 <button onClick={() => setEditModal(null)} className="flex-1 px-4 py-3.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-sm">{safeTranslate('btn_cancel', 'Cancel', 'বাতিল', 'रद्द करें')}</button>
                  <button onClick={submitEditField} className="flex-[2] px-4 py-3.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl text-xs font-black uppercase tracking-widest shadow-md transition-all hover:-translate-y-0.5 flex justify-center items-center gap-2">
-                   {t('btn_save')} <CheckCircle2 size={16}/>
+                   {safeTranslate('btn_save', 'Save', 'সংরক্ষণ', 'सहेजें')} <CheckCircle2 size={16}/>
                 </button>
               </div>
            </div>
@@ -1477,8 +1494,8 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
             <div className="bg-gradient-to-r from-gray-900 to-black p-6 sm:p-8 relative shrink-0 border-b-4 border-sanatani-orange">
                <button onClick={() => setShowImporter(false)} className="absolute top-5 right-5 text-gray-400 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-2.5 rounded-full backdrop-blur-sm shadow-sm"><X size={20}/></button>
-               <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 tracking-tight"><UploadCloud className="text-sanatani-orange" size={28}/> {t('bulk_csv_importer') || 'Bulk CSV Importer'}</h2>
-               <p className="text-[10px] sm:text-xs font-bold text-gray-400 mt-2 tracking-widest uppercase">{t('csv_subtitle') || 'Quickly populate your directory.'}</p>
+               <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 tracking-tight"><UploadCloud className="text-sanatani-orange" size={28}/> {safeTranslate('bulk_csv_importer', 'Bulk CSV Importer', 'বাল্ক CSV ইম্পোর্টার', 'बल्क CSV आयातक')}</h2>
+               <p className="text-[10px] sm:text-xs font-bold text-gray-400 mt-2 tracking-widest uppercase">{safeTranslate('csv_subtitle', 'Quickly populate your directory.', 'কাগজের খাতা নিমিষেই ডিজিটাল করুন।', 'कागजी रजिस्टरों को तुरंत डिजिटल करें।')}</p>
             </div>
 
             <div className="p-6 sm:p-8 overflow-y-auto bg-gray-50/50 pb-32 sm:pb-12 flex-1 min-h-0 scrollbar-hide">
@@ -1487,7 +1504,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                   <div className="flex gap-4 items-start bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="bg-orange-100 text-sanatani-orange font-black w-8 h-8 rounded-full flex justify-center items-center shrink-0 shadow-inner">1</div>
                     <div>
-                      <h4 className="text-sm font-black text-gray-900">{t('download_template') || 'Download Template'}</h4>
+                      <h4 className="text-sm font-black text-gray-900">{safeTranslate('download_template', 'Download Template', 'টেমপ্লেট ডাউনলোড করুন', 'टेम्पलेट डाउनलोड करें')}</h4>
                       <p className="text-[10px] text-gray-500 font-bold mb-3 uppercase tracking-wider">Get the exact column structure required.</p>
                       <button onClick={downloadCsvTemplate} className="flex items-center gap-2 bg-white border border-gray-200 hover:border-sanatani-orange hover:text-sanatani-orange text-gray-700 px-4 py-2.5 rounded-xl text-xs font-black shadow-sm transition-all"><Download size={14}/> Download CSV</button>
                     </div>
@@ -1495,14 +1512,14 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                   <div className="flex gap-4 items-start bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="bg-orange-100 text-sanatani-orange font-black w-8 h-8 rounded-full flex justify-center items-center shrink-0 shadow-inner">2</div>
                     <div>
-                      <h4 className="text-sm font-black text-gray-900">{t('format_data') || 'Format Data'}</h4>
+                      <h4 className="text-sm font-black text-gray-900">{safeTranslate('format_data', 'Format Data', 'ডেটা ফরম্যাট করুন', 'डेटा को प्रारूपित करें')}</h4>
                       <p className="text-xs text-gray-500 font-bold leading-relaxed mt-1">Ensure <code className="bg-gray-100 px-1.5 py-0.5 rounded-md text-gray-700 border border-gray-200">Name</code> and <code className="bg-gray-100 px-1.5 py-0.5 rounded-md text-gray-700 border border-gray-200">Phone</code> columns are completely filled.</p>
                     </div>
                   </div>
                   <div className="flex gap-4 items-start bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="bg-orange-100 text-sanatani-orange font-black w-8 h-8 rounded-full flex justify-center items-center shrink-0 shadow-inner">3</div>
                     <div className="w-full">
-                      <h4 className="text-sm font-black text-gray-900 mb-3">{t('upload_file') || 'Upload File'}</h4>
+                      <h4 className="text-sm font-black text-gray-900 mb-3">{safeTranslate('upload_file', 'Upload File', 'ফাইল আপলোড করুন', 'फ़ाइल अपलोड करें')}</h4>
                       <label className="border-2 border-dashed border-gray-300 hover:border-sanatani-orange hover:bg-orange-50/30 bg-gray-50 rounded-2xl p-10 text-center transition-all cursor-pointer flex flex-col items-center justify-center w-full group">
                         <UploadCloud size={48} className="text-gray-300 mb-4 group-hover:text-sanatani-orange transition-colors group-hover:scale-110" />
                         <p className="text-xs font-black text-gray-600 uppercase tracking-widest">Click or drag your .csv file here.</p>
@@ -1516,8 +1533,8 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
               {csvPreview.length > 0 && (
                 <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-xl animate-in zoom-in-95">
                   <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-                    <h4 className="text-sm sm:text-base font-black text-green-600 flex items-center gap-2"><CheckCircle2 size={20}/> {t('data_validated') || 'Data Validated'}</h4>
-                    <span className="bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest shadow-sm">{csvPreview.length} {t('records') || 'Records'}</span>
+                    <h4 className="text-sm sm:text-base font-black text-green-600 flex items-center gap-2"><CheckCircle2 size={20}/> {safeTranslate('data_validated', 'Data Validated', 'ডেটা যাচাই সম্পন্ন', 'डेटा सत्यापित')}</h4>
+                    <span className="bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest shadow-sm">{csvPreview.length} {safeTranslate('records', 'Records', 'টি প্রোফাইল', 'प्रोफाइल')}</span>
                   </div>
 
                   <div className="max-h-64 overflow-y-auto mb-6 space-y-2 pr-2 scrollbar-hide">
@@ -1531,9 +1548,9 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                   </div>
 
                   <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
-                    <button onClick={() => setCsvPreview([])} className="px-5 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors shadow-sm">{t('btn_cancel')}</button>
+                    <button onClick={() => setCsvPreview([])} className="px-5 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors shadow-sm">{safeTranslate('btn_cancel', 'Cancel', 'বাতিল', 'रद्द करें')}</button>
                     <button onClick={executeBulkImport} disabled={importing} className="flex items-center gap-2 px-6 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest bg-gray-900 text-white hover:bg-black transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:transform-none">
-                      {importing ? <Loader2 size={16} className="animate-spin"/> : <UploadCloud size={16}/>} {t('btn_import') || 'Import Now'}
+                      {importing ? <Loader2 size={16} className="animate-spin"/> : <UploadCloud size={16}/>} {safeTranslate('btn_import', 'Import Now', 'ইমপোর্ট করুন', 'आयात (Import)')}
                     </button>
                   </div>
                 </div>
@@ -1552,7 +1569,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
             <div className="flex justify-between items-center p-5 sm:p-8 border-b border-gray-100 shrink-0 bg-gray-50/50">
               <h3 className="text-xl sm:text-2xl font-black text-gray-900 flex items-center gap-3 tracking-tight">
-                <UserPlus size={24} className="text-sanatani-orange" /> {t('prov_profile') || 'Provision Profile'}
+                <UserPlus size={24} className="text-sanatani-orange" /> {safeTranslate('prov_profile', 'Provision Profile', 'নিরাপদ প্রোফাইল তৈরি করুন', 'प्रोफ़ाइल बनाएँ')}
               </h3>
               <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-800 bg-gray-100 p-2.5 rounded-full transition-colors shadow-sm"><X size={20}/></button>
             </div>
@@ -1578,58 +1595,58 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                    <div className="sm:col-span-2 flex items-center gap-3 border-b border-gray-100 pb-2">
                       <ShieldCheck size={16} className="text-green-500" />
-                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('req_identity_data') || 'Required Identity Data'}</span>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{safeTranslate('req_identity_data', 'Required Identity Data', 'প্রয়োজনীয় পরিচয় তথ্য', 'आवश्यक पहचान डेटा')}</span>
                    </div>
 
                    <div>
-                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('full_name')} *</label>
+                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('full_name', 'Full Name', 'সম্পূর্ণ নাম', 'पूरा नाम')} *</label>
                      <input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="e.g. Adesh Chandra" />
                    </div>
                    <div>
-                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('phone_number')} *</label>
+                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('phone_number', 'Phone Number', 'ফোন নম্বর', 'फ़ोन नंबर')} *</label>
                      <input type="tel" required value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="e.g. +88017000000" />
                    </div>
                    <div>
-                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('email')} *</label>
+                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('email', 'Email Address', 'ইমেইল', 'ईमेल')} *</label>
                      <input type="email" required value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="email@domain.com" />
                    </div>
                    <div className="grid grid-cols-2 gap-4">
                      <div>
-                       <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('blood_group')} *</label>
+                       <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('blood_group', 'Blood Group', 'রক্তের গ্রুপ', 'रक्त समूह')} *</label>
                        <input type="text" required value={formData.bloodGroup} onChange={e=>setFormData({...formData, bloodGroup: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="e.g. O+" />
                      </div>
                      <div>
-                       <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('country')} *</label>
+                       <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('country', 'Country', 'দেশ', 'देश')} *</label>
                        <input type="text" required value={formData.country} onChange={e=>setFormData({...formData, country: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="e.g. Bangladesh" />
                      </div>
                    </div>
 
                    <div className="sm:col-span-2 flex items-center gap-3 border-b border-gray-100 pb-2 mt-2">
                       <MapPin size={16} className="text-gray-400" />
-                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('ext_details') || 'Extended Details (Optional)'}</span>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{safeTranslate('ext_details', 'Extended Details (Optional)', 'অতিরিক্ত তথ্য (ঐচ্ছিক)', 'विस्तृत जानकारी (वैकल्पिक)')}</span>
                    </div>
 
                    <div>
-                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('nid')}</label>
+                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('nid', 'Govt ID / NID', 'জাতীয় পরিচয়পত্র', 'राष्ट्रीय पहचान पत्र')}</label>
                      <input type="text" value={formData.nid} onChange={e=>setFormData({...formData, nid: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="ID Number" />
                    </div>
                    <div>
-                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('gotra_lineage')}</label>
+                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('gotra_lineage', 'Gotra Lineage', 'গোত্র', 'गोत्र')}</label>
                      <input type="text" value={formData.gotra} onChange={e=>setFormData({...formData, gotra: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="e.g. Kashyap" />
                    </div>
                    <div className="sm:col-span-2">
-                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('full_address')}</label>
+                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('full_address', 'Full Address', 'সম্পূর্ণ ঠিকানা', 'पूरा पता')}</label>
                      <input type="text" value={formData.address} onChange={e=>setFormData({...formData, address: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="House, Street, City, Region..." />
                    </div>
                    <div className="sm:col-span-2">
-                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('cultural_desig')}</label>
+                     <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('cultural_desig', 'Designation', 'পদবী', 'पदनाम')}</label>
                      <input type="text" value={formData.designation} onChange={e=>setFormData({...formData, designation: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="e.g. Chief Pujari, Cashier, Advisor..." />
                    </div>
 
                    {isAdmin && (
                      <div className="sm:col-span-2 p-5 sm:p-6 bg-orange-50 border border-orange-100 rounded-3xl mt-4 relative overflow-hidden shadow-inner">
                         <div className="absolute top-0 left-0 w-1.5 h-full bg-sanatani-orange"></div>
-                        <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Key size={14}/> {t('sys_role') || 'System Access Role'}</label>
+                        <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Key size={14}/> {safeTranslate('sys_role', 'System Access Role', 'সিস্টেম অ্যাক্সেস রোল', 'सिस्टम एक्सेस रोल')}</label>
                         <select value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})} className="w-full p-4 bg-white border border-orange-200 rounded-xl text-sm font-black text-orange-900 outline-none shadow-sm cursor-pointer focus:border-sanatani-orange focus:ring-4 focus:ring-orange-100 transition-all appearance-none">
                           <option value="MEMBER">MEMBER (Read Only / Basic Profile)</option>
                           <option value="MANAGER">MANAGER (Can log funds & events)</option>
@@ -1641,7 +1658,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
                 <div className="pt-6 mt-8 border-t border-gray-100">
                   <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-black py-4 rounded-2xl text-sm uppercase tracking-widest flex justify-center items-center gap-2 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 disabled:opacity-50 disabled:transform-none">
-                    {submitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20}/>} {submitting ? 'PROCESSING...' : t('prov_profile') || 'Provision Secure Profile'}
+                    {submitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20}/>} {submitting ? 'PROCESSING...' : (safeTranslate('prov_profile', 'Provision Secure Profile', 'নিরাপদ প্রোফাইল তৈরি করুন', 'प्रोफ़ाइल बनाएँ'))}
                   </button>
                   <p className="text-center text-[10px] font-bold text-gray-400 mt-4 uppercase tracking-widest">Auto-Login QR & Credentials PDF will generate automatically.</p>
                 </div>
@@ -1650,6 +1667,11 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
           </div>
         </div>
       , document.body)}
+
+      {/* 🏛️ ENTERPRISE FOOTER CREDIT */}
+      <div className="pt-12 pb-6 text-center opacity-70 border-t border-gray-200 mt-auto text-xs font-bold text-gray-500 shrink-0">
+        Made with <Heart size={12} className="text-red-500 fill-current inline"/> by <span className="font-black text-sanatani-orange">TrackIQ Academy</span> • Universal Directory & CRM
+      </div>
 
     </div>
   );
