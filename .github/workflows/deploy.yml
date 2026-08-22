@@ -1,0 +1,60 @@
+name: Sanatani Portal CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: 
+
+jobs:
+  build_and_deploy:
+    name: Build Web & Mobile APK, Deploy to Firebase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22' # ✨ UPDATED: Shifted to Node 22 LTS to fix the GitHub deprecation warning
+          cache: 'npm' # Caches node_modules to massively speed up React builds
+
+      - name: ☕ Setup Java 17 (Required for Android Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle' # Caches Maven/Gradle downloads to bypass the 429 Too Many Requests error
+
+      - name: 📦 Install Dependencies
+        run: npm install
+
+      - name: 🏗️ Build React Vite App
+        run: npm run build
+
+      - name: 🔄 Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: 📱 Build Debug APK via Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      # ✨ TEMPORARILY DISABLED: To save GitHub storage quota. 
+      # Uncomment these lines when you are ready to download the final APK for device testing.
+      # - name: 📦 Upload APK Artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: Sanatani-Bandhan-Debug
+      #     path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: 🚀 Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          channelId: live
+          projectId: shda-6245c
