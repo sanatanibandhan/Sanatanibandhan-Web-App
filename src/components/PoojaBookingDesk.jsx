@@ -6,7 +6,7 @@ import {
   Sparkles, CalendarDays, User, CheckCircle2, AlertTriangle, 
   Loader2, Plus, X, HelpCircle, Lightbulb, Search, 
   Flame, BookOpen, Clock, ShieldCheck, Ticket, MapPin, Check,
-  Globe2, UserPlus, BellRing, UserMinus, ShieldAlert
+  Globe2, UserPlus, BellRing, UserMinus, ShieldAlert, Phone, Banknote
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { pushToDataLayer } from '../utils/gtm';
@@ -38,7 +38,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
     { id: 'POOJA-03', name: safeTranslate('pooja_namakaran', 'Namakaran Sanskar', 'নামকরণ সংস্কার', 'नामकरण संस्कार'), price: 500, duration: '1 Hour', category: 'Life Sanskar' },
     { id: 'POOJA-04', name: safeTranslate('pooja_grihapravesh', 'Griha Pravesh Puja', 'গৃহপ্রবেশ পূজা', 'गृह प्रवेश पूजा'), price: 2100, duration: '3 Hours', category: 'Off-site Seva' },
     { id: 'POOJA-05', name: safeTranslate('pooja_archana', 'Daily Archana / Pushpanjali', 'দৈনিক অর্চনা / পুষ্পাঞ্জলি', 'दैनिक अर्चना / पुष्पांजलि'), price: 100, duration: '30 Mins', category: 'Daily Seva' }
-  ], [language]); // Depend on language to trigger re-render
+  ], [language]);
 
   // 💾 Offline Cached States
   const [bookings, setBookings] = useState(() => {
@@ -50,7 +50,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
   const [globalPurohits, setGlobalPurohits] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`sb_global_purohits`)) || []; } catch { return []; }
   });
-  
+
   const [catalog] = useState(DEFAULT_CATALOG);
 
   // UI Filters
@@ -73,7 +73,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
   });
 
   const [toast, setToast] = useState(null);
-  const [confirmDialog, setConfirmDialog] = useState(null); // ✨ ADDED ENTERPRISE MODAL ENGINE
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   const isManagerOrAdmin = session?.role === 'ADMIN' || session?.role === 'SUPER_ADMIN' || session?.role === 'MANAGER';
   const curSymbol = session?.currency?.symbol || '৳';
@@ -115,12 +115,11 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
       }
     });
 
-    // 3. Fetch Global Verified Purohits (B2B Engine)
+    // 3. Fetch Global Verified Purohits (Universal B2B Marketplace Engine)
     const globalRef = ref(db, `global_purohits`);
     const unsubGlobal = onValue(globalRef, (snap) => {
       if (snap.exists()) {
         const data = snap.val();
-        // Only fetch strictly verified scholars
         const list = Object.keys(data).map(k => ({ uid: k, ...data[k] })).filter(p => p.verifiedBadge === true);
         setGlobalPurohits(list);
         localStorage.setItem(`sb_global_purohits`, JSON.stringify(list));
@@ -222,51 +221,49 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
     await executeSafeUpdate(updates, `Booking status updated to ${newStatus}`);
   };
 
-  // ✨ GIG ECONOMY: HIRE GLOBAL PUROHIT TO LOCAL ROSTER
+  // ✨ UNIVERSAL GIG ECONOMY: HIRE GLOBAL PUROHIT TO LOCAL ROSTER
   const handleInvitePurohit = (purohit) => {
     if(localRoster.find(r => r.uid === purohit.uid)) return showToast("This scholar is already on your local panel.", "error");
 
     setConfirmDialog({
-      title: "Invite to Local Panel",
-      message: `Send an official invitation to ${purohit.name} to join your Mandir's active Purohit roster? They will be notified immediately.`,
+      title: "Invite to Organization Panel",
+      message: `Send an official standby invitation to ${purohit.name} (${purohit.specialization || 'Vedic Scholar'}) to join your active roster for leave replacement or Utsav services?`,
       confirmText: "SEND INVITATION",
       isDanger: false,
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
           const updates = {};
-          // 1. Add to Local Roster (Status Pending)
           updates[`communities/${session.communityId}/purohit_roster/${purohit.uid}`] = {
              uid: purohit.uid,
              name: purohit.name,
              phone: purohit.phone || 'N/A',
-             status: 'ACTIVE', // Auto-activating for smooth UX in demo
+             status: 'ACTIVE',
              joinedAt: serverTimestamp()
           };
-          
-          // 2. Notify the Purohit Globally
+
           const notifId = push(ref(db, `communities/${session.communityId}/notifications/${purohit.uid}`)).key;
           updates[`communities/${session.communityId}/notifications/${purohit.uid}/${notifId}`] = {
-             id: notifId, title: "Roster Invitation", message: `${session.communityName} has added you to their active Purohit Panel!`, type: "REQUEST", timestamp: Date.now(), isRead: false
+             id: notifId, title: "Roster Invitation", message: `${session.communityName} has added you to their active Purohit Roster!`, type: "REQUEST", timestamp: Date.now(), isRead: false
           };
 
-          await executeSafeUpdate(updates, `${purohit.name} added to your Local Panel!`);
+          await executeSafeUpdate(updates, `${purohit.name} added to your Roster!`);
           logAudit("PUROHIT_HIRED", `Added Global Scholar ${purohit.name} to local panel.`);
         } catch (e) { showToast(e.message, "error"); }
       }
     });
   };
 
-  // ✨ GIG ECONOMY: LEAVE MANAGEMENT ENGINE
+  // ✨ LEAVE MANAGEMENT ENGINE
   const handleToggleLeave = (purohit) => {
     const isCurrentlyOnLeave = purohit.status === 'ON_LEAVE';
     const newStatus = isCurrentlyOnLeave ? 'ACTIVE' : 'ON_LEAVE';
-    
+
     setConfirmDialog({
       title: isCurrentlyOnLeave ? "Mark Active" : "Mark on Leave",
       message: isCurrentlyOnLeave 
-        ? `${purohit.name} is back? They will be available for new bookings again.`
-        : `Mark ${purohit.name} as on leave/vacation? You may need to hire temporary coverage from the Global Registry.`,
+        ? `${purohit.name} is back from leave? They will be available for new bookings again.`
+        : `Mark ${purohit.name} as on leave/pilgrimage? This triggers standby replacement alerts across the network.`,
       confirmText: isCurrentlyOnLeave ? "MARK ACTIVE" : "MARK ON LEAVE",
       isDanger: !isCurrentlyOnLeave,
       onConfirm: async () => {
@@ -291,7 +288,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
   }, [bookings, searchTerm, statusFilter]);
 
   const filteredGlobalPurohits = useMemo(() => {
-    return globalPurohits.filter(p => p.name.toLowerCase().includes(networkSearchTerm.toLowerCase()));
+    return globalPurohits.filter(p => p.name.toLowerCase().includes(networkSearchTerm.toLowerCase()) || (p.specialization && p.specialization.toLowerCase().includes(networkSearchTerm.toLowerCase())));
   }, [globalPurohits, networkSearchTerm]);
 
   const activeLocalPurohits = localRoster.filter(r => r.status === 'ACTIVE');
@@ -300,7 +297,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
   if (loading) return <div className="flex justify-center p-20 text-sanatani-orange"><Loader2 size={40} className="animate-spin" /></div>;
 
   return (
-    <div className="space-y-6 fade-in pb-12 relative w-full">
+    <div className="space-y-6 fade-in pb-12 relative w-full flex flex-col min-h-[90vh]">
 
       {/* ✨ TOAST ENGINE */}
       {toast && createPortal(
@@ -339,7 +336,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
       )}
 
       {/* ✨ PREMIUM HEADER BANNER */}
-      <div className="bg-gradient-to-br from-orange-600 via-red-600 to-red-800 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden ring-1 ring-white/10">
+      <div className="bg-gradient-to-br from-orange-600 via-red-600 to-red-800 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden ring-1 ring-white/10 shrink-0">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 opacity-10 pointer-events-none transform rotate-12">
            <Flame size={250} className="text-white"/>
         </div>
@@ -375,7 +372,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
 
       {/* QUICK GUIDE */}
       {showGuide && (
-        <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 p-5 sm:p-6 rounded-2xl shadow-inner relative animate-in slide-in-from-top-2">
+        <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 p-5 sm:p-6 rounded-2xl shadow-inner relative animate-in slide-in-from-top-2 shrink-0">
           <button onClick={() => setShowGuide(false)} className="absolute top-4 right-4 text-orange-400 hover:text-orange-700"><X size={18}/></button>
           <h3 className="text-sm font-black text-orange-900 flex items-center gap-2 mb-4 uppercase tracking-widest"><Lightbulb size={18} className="text-orange-500"/> {safeTranslate('quick_guide_title', 'Command Center Guide', 'কমান্ড সেন্টার গাইড', 'कमांड सेंटर गाइड')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -396,8 +393,8 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
             <div className="flex items-start gap-3 bg-white/80 p-4 rounded-xl border border-orange-100 shadow-sm">
               <div className="text-orange-600 shrink-0"><Globe2 size={20}/></div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-orange-900 mb-0.5">3. Global Network</p>
-                <p className="text-[9px] font-bold text-gray-500 leading-tight">Need a priest? Browse the Global Purohit Registry to hire verified scholars for your Mandir's local roster.</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-orange-900 mb-0.5">3. Universal Marketplace</p>
+                <p className="text-[9px] font-bold text-gray-500 leading-tight">Need standby coverage for temple leave? Browse verified global scholars and invite them instantly.</p>
               </div>
             </div>
           </div>
@@ -405,7 +402,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
       )}
 
       {/* ✨ PREMIUM SEGMENTED TAB CONTROLLER */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-2 rounded-2xl border border-gray-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-2 rounded-2xl border border-gray-200 shadow-sm shrink-0">
         <div className="flex w-full sm:w-auto bg-gray-100/80 p-1.5 rounded-xl overflow-x-auto scrollbar-hide">
           <button onClick={() => setActiveTab('BOOKINGS')} className={`flex-1 sm:w-40 py-3 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all flex items-center justify-center gap-2 whitespace-nowrap px-4 ${activeTab === 'BOOKINGS' ? 'bg-white text-sanatani-orange shadow-md border border-gray-100' : 'text-gray-500 hover:text-gray-800'}`}>
             <Ticket size={14}/> {safeTranslate('active_bookings', 'Bookings', 'বুকিং', 'बुकिंग')} ({bookings.length})
@@ -415,7 +412,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
           </button>
           {isManagerOrAdmin && (
             <button onClick={() => setActiveTab('NETWORK')} className={`flex-1 sm:w-40 py-3 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all flex items-center justify-center gap-2 whitespace-nowrap px-4 ${activeTab === 'NETWORK' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-800'}`}>
-              <Globe2 size={14}/> Purohit Network
+              <Globe2 size={14}/> Universal Marketplace
             </button>
           )}
         </div>
@@ -435,12 +432,10 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: ACTIVE BOOKINGS (TICKET-STYLE CARDS)                               */}
+      {/* TAB 1: ACTIVE BOOKINGS                                                    */}
       {/* ========================================================================= */}
       {activeTab === 'BOOKINGS' && (
-        <div className="space-y-6 animate-in fade-in">
-
-          {/* Status Filter Pills */}
+        <div className="space-y-6 animate-in fade-in flex-1">
           <div className="flex items-center gap-2 w-full overflow-x-auto pb-2 scrollbar-hide">
             {['ALL', 'CONFIRMED', 'COMPLETED', 'CANCELLED'].map(st => (
               <button 
@@ -457,8 +452,6 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
             {filteredBookings.length > 0 ? (
               filteredBookings.map(book => (
                 <div key={book.bookingId} className="bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col group relative">
-
-                  {/* Card Header (Dynamic Colors based on status) */}
                   <div className={`p-5 flex justify-between items-center border-b ${book.status === 'CONFIRMED' ? 'bg-orange-50/50 border-orange-100' : book.status === 'COMPLETED' ? 'bg-green-50/50 border-green-100' : 'bg-gray-50 border-gray-200'}`}>
                     <div className="flex items-center gap-2">
                        <div className={`w-2.5 h-2.5 rounded-full ${book.status === 'CONFIRMED' ? 'bg-orange-500 animate-pulse' : book.status === 'COMPLETED' ? 'bg-green-500' : 'bg-gray-400'}`}></div>
@@ -469,9 +462,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                     <span className="text-[10px] font-mono text-gray-400 font-bold tracking-widest">{book.bookingId}</span>
                   </div>
 
-                  {/* Card Body Split Layout */}
                   <div className="p-6 flex-1 flex flex-col sm:flex-row gap-6">
-                    {/* Left: Event Details */}
                     <div className="flex-1 space-y-3">
                        <h3 className="text-xl font-black text-gray-900 leading-tight group-hover:text-sanatani-orange transition-colors">{book.poojaName}</h3>
                        <div className="space-y-2 text-xs font-bold text-gray-500">
@@ -480,7 +471,6 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                        </div>
                     </div>
 
-                    {/* Right: Yajamana Sankalp */}
                     <div className="sm:w-48 bg-gray-50 rounded-2xl p-4 border border-gray-100 flex flex-col justify-center shadow-inner shrink-0 relative overflow-hidden">
                        <div className="absolute top-0 right-0 p-2 opacity-5"><Flame size={48}/></div>
                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 relative z-10">{safeTranslate('yajamana_name', 'Yajamana', 'যজমান', 'यजमान')}</p>
@@ -493,7 +483,6 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                     </div>
                   </div>
 
-                  {/* Card Footer: Action Bar */}
                   <div className="p-4 border-t border-gray-100 flex items-center justify-between gap-4 bg-white">
                     <div className="flex items-center gap-1.5 text-xs font-black text-green-700 bg-green-50 px-3 py-2 rounded-xl border border-green-200 uppercase tracking-widest shadow-sm">
                        {curSymbol}{book.dakshinaAmount} Dakshina
@@ -526,10 +515,10 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: POOJA CATALOG (PREMIUM SERVICE CARDS)                              */}
+      {/* TAB 2: CATALOG                                                            */}
       {/* ========================================================================= */}
       {activeTab === 'CATALOG' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in flex-1">
           {catalog.map(item => (
             <div key={item.id} className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 space-y-6 flex flex-col justify-between group relative overflow-hidden">
                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-orange-400 to-red-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-500"></div>
@@ -559,19 +548,19 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
       )}
 
       {/* ========================================================================= */}
-      {/* ✨ TAB 3: PUROHIT NETWORK (B2B GIG ECONOMY - ADMIN ONLY)                  */}
+      {/* ✨ TAB 3: UNIVERSAL MARKETPLACE & STANDBY NETWORK (ALL WORKSPACE TYPES)   */}
       {/* ========================================================================= */}
       {activeTab === 'NETWORK' && isManagerOrAdmin && (
-        <div className="space-y-8 animate-in fade-in">
-          
-          {/* SECTION A: LOCAL MANDIR PANEL */}
+        <div className="space-y-8 animate-in fade-in flex-1">
+
+          {/* SECTION A: LOCAL ROSTER & STANDBY LEAVE COVER */}
           <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden ring-1 ring-black/5">
              <div className="p-6 bg-gradient-to-r from-orange-50 to-red-50 border-b border-orange-100 flex justify-between items-center">
                <div>
-                 <h3 className="text-lg font-black text-gray-900 flex items-center gap-2"><ShieldCheck className="text-sanatani-orange"/> Local Mandir Roster</h3>
-                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Priests currently assigned to your community</p>
+                 <h3 className="text-lg font-black text-gray-900 flex items-center gap-2"><ShieldCheck className="text-sanatani-orange"/> Local Organization Roster & Standby Cover</h3>
+                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Manage leave replacements and active resident priests</p>
                </div>
-               <span className="bg-white text-sanatani-orange border border-orange-200 px-3 py-1 rounded-lg text-xs font-black shadow-sm">{localRoster.length} Hired</span>
+               <span className="bg-white text-sanatani-orange border border-orange-200 px-3 py-1 rounded-lg text-xs font-black shadow-sm">{localRoster.length} Active</span>
              </div>
 
              <div className="p-6">
@@ -580,9 +569,9 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                    <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
                    <ShieldAlert size={20} className="text-red-500 shrink-0 mt-0.5"/>
                    <div>
-                     <p className="text-xs font-black text-red-800 uppercase tracking-widest mb-1">Emergency Coverage Needed</p>
+                     <p className="text-xs font-black text-red-800 uppercase tracking-widest mb-1">Emergency Standby Replacement Needed</p>
                      <p className="text-sm font-bold text-red-900 leading-relaxed">
-                       {onLeavePurohits.length} Purohit(s) are marked on leave. Hire temporary coverage from the Global Registry below to ensure Utsavs continue smoothly.
+                       {onLeavePurohits.length} priest(s) are currently on leave or pilgrimage. Sourcing temporary standby coverage from the Universal Registry below ensures daily Nitya Seva continues without interruption.
                      </p>
                    </div>
                  </div>
@@ -604,7 +593,6 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                        <button 
                          onClick={() => handleToggleLeave(r)}
                          className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border shadow-sm transition-colors ${r.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200' : 'bg-red-50 text-red-700 border-red-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}
-                         title={r.status === 'ACTIVE' ? 'Mark on Leave' : 'Mark Active'}
                        >
                          {r.status === 'ACTIVE' ? 'Active' : 'On Leave'}
                        </button>
@@ -614,19 +602,19 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                ) : (
                  <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
                    <UserMinus size={32} className="mx-auto text-gray-400 mb-3 opacity-50"/>
-                   <p className="text-sm font-black text-gray-600">Your Local Panel is empty.</p>
-                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Hire verified scholars from the Global Registry below.</p>
+                   <p className="text-sm font-black text-gray-600">Your organization panel is currently empty.</p>
+                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Invite verified scholars from the Universal Marketplace below.</p>
                  </div>
                )}
              </div>
           </div>
 
-          {/* SECTION B: GLOBAL B2B REGISTRY */}
+          {/* SECTION B: UNIVERSAL GLOBAL REGISTRY */}
           <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden ring-1 ring-black/5">
              <div className="p-6 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                <div>
-                 <h3 className="text-lg font-black text-gray-900 flex items-center gap-2"><Globe2 className="text-blue-600"/> Global Vedic Scholars</h3>
-                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Browse and invite verified Pandits for your Utsavs</p>
+                 <h3 className="text-lg font-black text-gray-900 flex items-center gap-2"><Globe2 className="text-blue-600"/> Universal Purohit Marketplace</h3>
+                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Source verified Vedic scholars across all communities for festivals or standby leave</p>
                </div>
                <div className="relative w-full sm:w-72">
                  <Search size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -654,14 +642,14 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                              </div>
                              <div>
                                <h4 className="text-base font-black text-gray-900 group-hover:text-blue-600 transition-colors">{p.name}</h4>
-                               <span className="text-[8px] font-black uppercase tracking-widest bg-green-100 text-green-800 px-2 py-0.5 rounded flex items-center gap-1 w-fit mt-1 border border-green-200 shadow-sm"><ShieldCheck size={10}/> Verified</span>
+                               <span className="text-[8px] font-black uppercase tracking-widest bg-green-100 text-green-800 px-2 py-0.5 rounded flex items-center gap-1 w-fit mt-1 border border-green-200 shadow-sm"><ShieldCheck size={10}/> Verified Scholar</span>
                              </div>
                            </div>
                          </div>
 
                          <div className="space-y-2 mb-6">
                            <p className="text-xs font-bold text-gray-600 flex items-center gap-2"><MapPin size={12} className="text-gray-400"/> {p.location || 'Global (Available Online)'}</p>
-                           {p.expertise && <p className="text-xs font-bold text-gray-600 flex items-center gap-2"><Sparkles size={12} className="text-gray-400"/> {p.expertise}</p>}
+                           <p className="text-xs font-bold text-gray-600 flex items-center gap-2"><Sparkles size={12} className="text-gray-400"/> {p.specialization || 'Vedic Rituals & Pujas'}</p>
                          </div>
 
                          <div className="mt-auto pt-4 border-t border-gray-100">
@@ -670,7 +658,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                              disabled={isAlreadyHired}
                              className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center gap-2 ${isAlreadyHired ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-transparent' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-900 hover:text-white hover:border-gray-900'}`}
                            >
-                             {isAlreadyHired ? <><Check size={14}/> On Panel</> : <><UserPlus size={14}/> Invite to Panel</>}
+                             {isAlreadyHired ? <><Check size={14}/> On Panel</> : <><UserPlus size={14}/> Invite for Standby Cover</>}
                            </button>
                          </div>
                        </div>
@@ -679,7 +667,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                  ) : (
                    <div className="col-span-full py-16 text-center text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
                      <Globe2 size={40} className="mx-auto mb-3 opacity-20 text-blue-500"/>
-                     <p className="text-sm font-black text-gray-600">No matching scholars found.</p>
+                     <p className="text-sm font-black text-gray-600">No verified global scholars found in the registry.</p>
                    </div>
                  )}
                </div>
@@ -689,7 +677,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: BOOK NEW POOJA (ENTERPRISE FORM)                                   */}
+      {/* MODAL: BOOK NEW POOJA                                                     */}
       {/* ========================================================================= */}
       {showBookingModal && createPortal(
         <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-md z-[10000] flex items-center justify-center p-2 sm:p-4 pt-safe pb-safe">
@@ -704,8 +692,6 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
 
             <div className="p-6 sm:p-8 overflow-y-auto flex-1 min-h-0 bg-white pb-32 sm:pb-12 scrollbar-hide">
               <form onSubmit={handleCreateBooking} className="space-y-6 sm:space-y-8">
-
-                {/* Section 1: Ritual Details */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
                     <Flame size={16} className="text-orange-500"/>
@@ -727,7 +713,7 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{safeTranslate('booking_date', 'Booking Date', 'বুকিংয়ের তারিখ', 'बुकिंग की तारीख')} *</label>
+                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{safeTranslate('booking_date', 'Booking Date', 'বুকিংয়ের তারিখ', 'बुकिंग की तारीख')} *</label>
                       <input type="date" required value={bookingForm.bookingDate} onChange={e=>setBookingForm({...bookingForm, bookingDate: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 outline-none focus:border-sanatani-orange focus:bg-white transition-all shadow-sm cursor-pointer" />
                     </div>
                     <div>
@@ -741,13 +727,12 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                          {activeLocalPurohits.map(p => (
                            <option key={p.uid} value={p.name}>{p.name}</option>
                          ))}
-                         {activeLocalPurohits.length === 0 && <option disabled>No local priests available. Visit Network tab.</option>}
+                         {activeLocalPurohits.length === 0 && <option disabled>No local priests available. Visit Marketplace tab.</option>}
                       </select>
                     </div>
                   </div>
                 </div>
 
-                {/* Section 2: Yajamana Identity */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 border-b border-gray-100 pb-2 mt-4">
                     <User size={16} className="text-blue-500"/>
@@ -770,7 +755,6 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
                   </div>
                 </div>
 
-                {/* Section 3: Treasury Link */}
                 <div className="bg-green-50/50 border border-green-200 p-5 sm:p-6 rounded-2xl shadow-inner mt-4 relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1.5 h-full bg-green-500"></div>
                   <div className="flex items-center justify-between mb-3">
@@ -792,6 +776,15 @@ export default function PoojaBookingDesk({ session, isOnline = navigator.onLine 
         document.body
       )}
 
+      {/* 🏛️ ENTERPRISE FOOTER CREDIT */}
+      <div className="pt-12 pb-6 text-center opacity-70 border-t border-gray-200 mt-auto text-xs font-bold text-gray-500 shrink-0">
+        Made with <Sparkles size={12} className="text-sanatani-orange fill-current inline"/> by <span className="font-black text-sanatani-orange">TrackIQ Academy</span> • Universal Pooja & Seva Desk
+      </div>
+
     </div>
   );
+}
+
+function getInitial(name) {
+  return name ? name.charAt(0).toUpperCase() : 'ॐ';
 }
