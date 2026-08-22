@@ -42,7 +42,7 @@ import {
   CheckCircle2, ShieldAlert, Edit, ShieldCheck, Lock, Filter, FileText, FileDigit, 
   AlertTriangle, BellRing, Menu, Ticket, Heart, GitBranch, 
   ScrollText, Sparkles, Send, ArrowRightLeft, HeartHandshake, Plus, History, Clock, FileDown,
-  FileBadge, GraduationCap
+  FileBadge, GraduationCap, UploadCloud
 } from 'lucide-react';
 
 const encodeIdentity = (ident) => {
@@ -86,7 +86,8 @@ export default function App() {
   // KYC Modal States
   const [showKycModal, setShowKycModal] = useState(false);
   const [kycSubmitting, setKycSubmitting] = useState(false);
-  const [kycForm, setKycForm] = useState({ specialization: '', experience: '', lineage: '', location: '' });
+  const [kycForm, setKycForm] = useState({ specialization: '', experience: '', lineage: '', location: '', certificateUrl: null });
+  const kycPhotoRef = useRef(null);
 
   // 🔄 Session Transformer: Isolates Database writes when in Purohit Mode
   const activeSession = useMemo(() => {
@@ -444,8 +445,42 @@ export default function App() {
     pushToDataLayer('open_kyc_modal', { community_id: session.communityId });
   };
 
+  // Dedicated Zero-Cost Compression for Certificates/Documents (Slightly higher res than profile photos)
+  const handleKycPhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = document.createElement('img');
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 800; // Allow readable resolution for text documents
+        let width = img.width;
+        let height = img.height;
+        if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
+        else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        setKycForm(prev => ({ ...prev, certificateUrl: compressedBase64 }));
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const submitKycApplication = async (e) => {
     e.preventDefault();
+    if (!kycForm.certificateUrl) {
+      showToast(safeTranslate('error', 'Error') + ": Please attach a verification document.", 'error');
+      return;
+    }
+    
     setKycSubmitting(true);
     try {
       const payload = {
@@ -458,12 +493,13 @@ export default function App() {
         specialization: kycForm.specialization,
         experienceYears: kycForm.experience,
         lineage: kycForm.lineage,
-        location: kycForm.location
+        location: kycForm.location,
+        certificateUrl: kycForm.certificateUrl // Stores compressed Base64 ID/Certificate
       };
       await executeSafeUpdate({ [`admin_queue/purohit_applications/${session.uid}`]: payload }, safeTranslate('application_submitted', 'Application submitted for verification!', 'আবেদন জমা দেওয়া হয়েছে!', 'आवेदन जमा कर दिया गया है!'));
       pushToDataLayer('submit_kyc_application', { community_id: session.communityId });
       setShowKycModal(false);
-      setKycForm({ specialization: '', experience: '', lineage: '', location: '' });
+      setKycForm({ specialization: '', experience: '', lineage: '', location: '', certificateUrl: null });
     } catch(err) {
       showToast(err.message, 'error');
     } finally {
@@ -663,7 +699,7 @@ export default function App() {
                {!isPurohitMode && <NavItem active={activeTab === 'panjika'} onClick={() => { setActiveTab('panjika'); setMobileMenuOpen(false); }} icon={<CalendarDays size={18} />} label={safeTranslate('nav_panjika', 'Panjika Events', 'পঞ্জিকা ইভেন্ট', 'पंचांग घटनाएँ').split('&')[0]} />}
 
                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">{safeTranslate('nav_group_settings', 'Outreach & Settings', 'আউটরিচ এবং সেটিংস', 'आउटरीच और सेटिंग्स')}</h4>
-               {!isPurohitMode && <NavItem active={activeTab === 'prachar'} onClick={() => { setActiveTab('prachar'); setMobileMenuOpen(false); }} icon={<Megaphone size={18} />} label={safeTranslate('nav_prachar', 'Broadcast', 'সম্প্রচার', 'प्रसारण')} />}
+               {!isPurohitMode && <NavItem active={activeTab === 'prachar'} onClick={() => { setActiveTab('prachar'); setMobileMenuOpen(false); }} icon={<Megaphone size={18} />} label={safeTranslate('nav_prachar', 'Broadcast', 'সম্প্রচার', 'প্রसारण')} />}
                {!isPurohitMode && <NavItem active={activeTab === 'polls'} onClick={() => { setActiveTab('polls'); setMobileMenuOpen(false); }} icon={<BarChart2 size={18} />} label={safeTranslate('nav_polls', 'Community Voting', 'কমিউনিটি ভোটিং', 'सामुदायिक मतदान')} />}
                {!isPurohitMode && isStaff && <NavItem active={activeTab === 'marketing'} onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }} icon={<Flame size={18} />} label={safeTranslate('nav_marketing', 'Social Assistant', 'সোশ্যাল অ্যাসিস্ট্যান্ট', 'सोशल असिस्टेंट')} />}
                <div className="my-2 border-t border-gray-100"></div>
@@ -998,8 +1034,8 @@ export default function App() {
 
                       <div className="grid grid-cols-2 divide-x divide-gray-100">
                         <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
-                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('gotra_lineage', 'Gotra Lineage', 'গোত্র', 'गोत्र')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><ShieldCheck size={14} className="text-purple-400 shrink-0"/> {userProfile.gotra || 'N/A'}</p></div>
-                          <button onClick={() => setEditModal({ field: 'gotra', displayName: safeTranslate('gotra_lineage', 'Gotra Lineage', 'গোত্র', 'गोत्र'), value: userProfile.gotra || '' })} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={12}/></button>
+                          <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('gotra_lineage', 'Gotra Lineage', 'গোত্র', 'গোত্র')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><ShieldCheck size={14} className="text-purple-400 shrink-0"/> {userProfile.gotra || 'N/A'}</p></div>
+                          <button onClick={() => setEditModal({ field: 'gotra', displayName: safeTranslate('gotra_lineage', 'Gotra Lineage', 'গোত্র', 'গোত্র'), value: userProfile.gotra || '' })} className="text-blue-600 bg-blue-50 p-2 rounded-lg shrink-0 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={12}/></button>
                         </div>
                         <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
                           <div className="overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('cultural_desig', 'Designation', 'পদবী', 'पदनाम')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-1.5 truncate"><Award size={14} className="text-yellow-500 shrink-0"/> {userProfile.designation || 'Member'}</p></div>
@@ -1297,7 +1333,7 @@ export default function App() {
                     <p className="text-[10px] font-black text-red-600 flex items-center gap-2 uppercase tracking-widest mb-5 border-b border-red-100 pb-4"><ShieldAlert size={16}/> {safeTranslate('security_controls', 'Security Controls', 'নিরাপত্তা নিয়ন্ত্রণ', 'सुरक्षा नियंत्रण')}</p>
 
                     <button onClick={handleSecureLogout} className="w-full bg-white border border-red-200 text-red-600 hover:bg-red-600 hover:text-white font-black py-4 rounded-xl text-[10px] uppercase tracking-widest flex justify-center items-center gap-2 transition-all shadow-sm hover:-translate-y-0.5">
-                      <LogOut size={16}/> {safeTranslate('secure_logout', 'Secure Logout', 'নিরাপদ লগআউট', 'सुरक्षित लॉगआउट')}
+                      <LogOut size={16}/> {safeTranslate('secure_logout', 'Secure Logout', 'নিরাপদ লগআউট', 'सुरक्षित লগआउट')}
                     </button>
                   </div>
                 </div>
@@ -1344,10 +1380,11 @@ export default function App() {
       , document.body)}
 
       {/* ✨ GLOBAL PUROHIT KYC APPLICATION MODAL */}
+      {/* 🚀 FIX: The entire modal body and footer are now wrapped inside <form> so native submission works */}
       {showKycModal && createPortal(
         <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-md z-[10500] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 ring-1 ring-white/20 relative overflow-hidden flex flex-col max-h-[95dvh]">
-            
+
             {/* Header */}
             <div className="p-6 border-b border-gray-100 bg-gray-50/80 shrink-0 flex justify-between items-center relative overflow-hidden">
                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><FileBadge size={100}/></div>
@@ -1363,73 +1400,100 @@ export default function App() {
                <button onClick={() => setShowKycModal(false)} className="p-2 bg-white rounded-full text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors shadow-sm border border-gray-200 relative z-10"><X size={16}/></button>
             </div>
 
-            {/* Scrollable Form Body */}
-            <div className="p-6 sm:p-8 overflow-y-auto flex-1 scrollbar-hide">
-              <form id="kycForm" onSubmit={submitKycApplication} className="space-y-6">
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{safeTranslate('full_name', 'Full Name')} *</label>
-                    <div className="relative">
-                      <User size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
-                      <input type="text" readOnly value={userProfile?.name || activeSession?.userName} className="w-full pl-10 pr-4 py-3.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 outline-none cursor-not-allowed" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{safeTranslate('phone_number', 'Phone Number')} *</label>
-                    <div className="relative">
-                      <Phone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
-                      <input type="text" readOnly value={userProfile?.phone || ''} className="w-full pl-10 pr-4 py-3.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 outline-none cursor-not-allowed" placeholder={safeTranslate('not_provided', 'Not Provided')}/>
-                    </div>
-                  </div>
-                </div>
+            {/* 🚀 FORM WRAPPER AROUND BOTH BODY AND FOOTER */}
+            <form onSubmit={submitKycApplication} className="flex flex-col h-full overflow-hidden flex-1">
+              {/* Scrollable Form Body */}
+              <div className="p-6 sm:p-8 overflow-y-auto flex-1 scrollbar-hide space-y-6">
 
-                <div className="bg-orange-50/50 border border-orange-200 p-5 rounded-2xl shadow-inner relative overflow-hidden">
-                  <p className="text-[10px] font-black text-orange-800 uppercase tracking-widest mb-4 flex items-center gap-1.5 border-b border-orange-100 pb-3">
-                     <GraduationCap size={14}/> Scholar Credentials
-                  </p>
-                  
-                  <div className="space-y-4 relative z-10">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_specialization', 'Primary Specialization')} *</label>
-                      <input type="text" required value={kycForm.specialization} onChange={e=>setKycForm({...kycForm, specialization: e.target.value})} className="w-full p-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-sanatani-orange shadow-sm transition-all" placeholder={safeTranslate('kyc_specialization_ph', 'e.g. Vivah, Vastu, Vedic Rituals')}/>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_experience', 'Years of Experience')} *</label>
-                        <input type="number" required min="1" value={kycForm.experience} onChange={e=>setKycForm({...kycForm, experience: e.target.value})} className="w-full p-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-sanatani-orange shadow-sm transition-all" placeholder="e.g. 5"/>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_lineage', 'Gotra & Vedic Lineage')} *</label>
-                        <input type="text" required value={kycForm.lineage} onChange={e=>setKycForm({...kycForm, lineage: e.target.value})} className="w-full p-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-sanatani-orange shadow-sm transition-all" placeholder={safeTranslate('kyc_lineage_ph', 'e.g. Kashyap, Rigveda')}/>
+                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{safeTranslate('full_name', 'Full Name')} *</label>
+                      <div className="relative">
+                        <User size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input type="text" readOnly value={userProfile?.name || activeSession?.userName} className="w-full pl-10 pr-4 py-3.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 outline-none cursor-not-allowed" />
                       </div>
                     </div>
-
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_location', 'Current City / Mandir')} *</label>
-                      <input type="text" required value={kycForm.location} onChange={e=>setKycForm({...kycForm, location: e.target.value})} className="w-full p-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-sanatani-orange shadow-sm transition-all" placeholder={safeTranslate('kyc_location_ph', 'e.g. Kashi Vishwanath, Varanasi')}/>
+                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{safeTranslate('phone_number', 'Phone Number')} *</label>
+                      <div className="relative">
+                        <Phone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input type="text" readOnly value={userProfile?.phone || ''} className="w-full pl-10 pr-4 py-3.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 outline-none cursor-not-allowed" placeholder={safeTranslate('not_provided', 'Not Provided')}/>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
-                  <ShieldCheck size={20} className="text-blue-500 shrink-0 mt-0.5"/>
-                  <p className="text-[10px] font-bold text-blue-800 leading-relaxed">
-                    By submitting this form, you confirm that your provided credentials are accurate. Our verification team will review your application within 24-48 hours.
-                  </p>
-                </div>
-              </form>
-            </div>
+                  <div className="bg-orange-50/50 border border-orange-200 p-5 rounded-2xl shadow-inner relative overflow-hidden">
+                    <p className="text-[10px] font-black text-orange-800 uppercase tracking-widest mb-4 flex items-center gap-1.5 border-b border-orange-100 pb-3">
+                       <GraduationCap size={14}/> Scholar Credentials
+                    </p>
 
-            {/* Footer / Actions */}
-            <div className="p-6 border-t border-gray-100 bg-gray-50/50 shrink-0 flex gap-3">
-               <button type="button" onClick={() => setShowKycModal(false)} className="flex-1 px-4 py-3.5 bg-white text-gray-600 border border-gray-200 hover:bg-gray-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-sm">{safeTranslate('btn_cancel', 'Cancel', 'বাতিল', 'रद्द करें')}</button>
-               <button type="submit" form="kycForm" disabled={kycSubmitting} className="flex-[2] px-4 py-3.5 bg-gray-900 text-white hover:bg-black rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 flex justify-center items-center gap-2 disabled:opacity-50">
-                 {kycSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>} 
-                 {safeTranslate('btn_submit_application', 'Submit Application', 'আবেদন জমা দিন', 'आवेदन जमा करें')}
-              </button>
-            </div>
+                    <div className="space-y-4 relative z-10">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_specialization', 'Primary Specialization')} *</label>
+                        <input type="text" required value={kycForm.specialization} onChange={e=>setKycForm({...kycForm, specialization: e.target.value})} className="w-full p-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-sanatani-orange shadow-sm transition-all" placeholder={safeTranslate('kyc_specialization_ph', 'e.g. Vivah, Vastu, Vedic Rituals')}/>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_experience', 'Years of Experience')} *</label>
+                          <input type="number" required min="1" value={kycForm.experience} onChange={e=>setKycForm({...kycForm, experience: e.target.value})} className="w-full p-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-sanatani-orange shadow-sm transition-all" placeholder="e.g. 5"/>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_lineage', 'Gotra & Vedic Lineage')} *</label>
+                          <input type="text" required value={kycForm.lineage} onChange={e=>setKycForm({...kycForm, lineage: e.target.value})} className="w-full p-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-sanatani-orange shadow-sm transition-all" placeholder={safeTranslate('kyc_lineage_ph', 'e.g. Kashyap, Rigveda')}/>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_location', 'Current City / Mandir')} *</label>
+                        <input type="text" required value={kycForm.location} onChange={e=>setKycForm({...kycForm, location: e.target.value})} className="w-full p-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-sanatani-orange shadow-sm transition-all" placeholder={safeTranslate('kyc_location_ph', 'e.g. Kashi Vishwanath, Varanasi')}/>
+                      </div>
+                      
+                      {/* ✨ ZERO-COST CANVAS UPLOAD DROPZONE */}
+                      <div className="mt-4 pt-4 border-t border-orange-100">
+                        <label className="block text-[10px] font-bold text-gray-600 mb-1.5">{safeTranslate('kyc_document', 'Verification Document (ID/Certificate)', 'যাচাইকরণ নথি (ID/সার্টিফিকেট)', 'सत्यापन दस्तावेज (आईडी/प्रमाणपत्र)')} *</label>
+                        <div 
+                          onClick={() => kycPhotoRef.current?.click()}
+                          className="w-full border-2 border-dashed border-orange-200 bg-white/50 hover:bg-orange-50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors"
+                        >
+                          {kycForm.certificateUrl ? (
+                            <div className="relative w-full h-32 rounded-lg overflow-hidden border border-orange-200">
+                              <img src={kycForm.certificateUrl} alt="Certificate" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                <span className="text-white text-xs font-bold flex items-center gap-1"><Edit size={14}/> Change Document</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-4">
+                              <UploadCloud size={24} className="text-orange-400 mx-auto mb-2"/>
+                              <p className="text-xs font-bold text-gray-700">Tap to upload Document</p>
+                              <p className="text-[9px] text-gray-500 mt-1">NID, Passport, or Institution Certificate</p>
+                            </div>
+                          )}
+                        </div>
+                        <input type="file" accept="image/*" className="hidden" ref={kycPhotoRef} onChange={handleKycPhotoUpload} />
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
+                    <ShieldCheck size={20} className="text-blue-500 shrink-0 mt-0.5"/>
+                    <p className="text-[10px] font-bold text-blue-800 leading-relaxed">
+                      By submitting this form, you confirm that your provided credentials are accurate. Our verification team will review your application within 24-48 hours.
+                    </p>
+                  </div>
+              </div>
+
+              {/* 🚀 Footer / Actions INSIDE the form */}
+              <div className="p-6 border-t border-gray-100 bg-gray-50/50 shrink-0 flex gap-3">
+                 <button type="button" onClick={() => setShowKycModal(false)} className="flex-1 px-4 py-3.5 bg-white text-gray-600 border border-gray-200 hover:bg-gray-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-sm">{safeTranslate('btn_cancel', 'Cancel', 'বাতিল', 'रद्द करें')}</button>
+                 <button type="submit" disabled={kycSubmitting} className="flex-[2] px-4 py-3.5 bg-gray-900 text-white hover:bg-black rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 flex justify-center items-center gap-2 disabled:opacity-50">
+                   {kycSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>} 
+                   {safeTranslate('btn_submit_application', 'Submit Application', 'আবেদন জমা দিন', 'आवेदन जमा करें')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       , document.body)}
