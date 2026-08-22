@@ -27,9 +27,6 @@ import PitruShradhDesk from './components/PitruShradhDesk';
 import PoojaBookingDesk from './components/PoojaBookingDesk';
 import SocialFeed from './components/SocialFeed';
 
-// ✨ DYNAMIC PLUGIN REGISTRY
-import { resolveWorkspacePlugin } from './config/workspaceRegistry';
-
 // 💬 Enterprise Live Support Widget
 import TawkToWidget from './components/TawkToWidget';
 
@@ -104,13 +101,8 @@ export default function App() {
       : session;
   }, [session, isPurohitMode]);
 
-  // ✨ DYNAMIC PLUGIN RESOLVER
-  const orgType = activeSession?.type || activeSession?.workspaceType || workspaceType || 'Mandir';
-  const activePlugin = resolveWorkspacePlugin(orgType);
-  const PluginIcon = activePlugin.icon;
-  const PluginComponent = activePlugin.component;
-
   // ✨ SMART VISIBILITY LOGIC (RBAC)
+  const orgType = activeSession?.type || activeSession?.workspaceType || workspaceType || 'Mandir';
   const isCommunityOrg = useMemo(() => ['Mandir', 'Samaj', 'Sangha', 'Purohit'].includes(orgType), [orgType]);
   const isDhamOrAshram = useMemo(() => ['Ashram', 'Tirth', 'Mandir'].includes(orgType), [orgType]);
   const isStaff = session?.role === 'ADMIN' || session?.role === 'SUPER_ADMIN' || session?.role === 'MANAGER';
@@ -445,7 +437,7 @@ export default function App() {
     pushToDataLayer('open_kyc_modal', { community_id: session.communityId });
   };
 
-  // Dedicated Zero-Cost Compression for Certificates/Documents (Slightly higher res than profile photos)
+  // Dedicated Zero-Cost Compression for Certificates/Documents
   const handleKycPhotoUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -494,7 +486,7 @@ export default function App() {
         experienceYears: kycForm.experience,
         lineage: kycForm.lineage,
         location: kycForm.location,
-        certificateUrl: kycForm.certificateUrl // Stores compressed Base64 ID/Certificate
+        certificateUrl: kycForm.certificateUrl 
       };
       await executeSafeUpdate({ [`admin_queue/purohit_applications/${session.uid}`]: payload }, safeTranslate('application_submitted', 'Application submitted for verification!', 'আবেদন জমা দেওয়া হয়েছে!', 'आवेदन जमा कर दिया गया है!'));
       pushToDataLayer('submit_kyc_application', { community_id: session.communityId });
@@ -515,7 +507,7 @@ export default function App() {
 
   const handleSecureLogout = () => {
     setConfirmDialog({
-      title: safeTranslate('secure_logout', 'Secure Logout', 'নিরাপদ লগআউট', 'सुरक्षित लॉगआउट'),
+      title: safeTranslate('secure_logout', 'Secure Logout', 'নিরাপদ লগআউট', 'सुरक्षित লগआउट'),
       message: safeTranslate('confirm_logout', 'Are you sure you want to securely log out of your workspace?', 'আপনি কি লগআউট করতে নিশ্চিত?', 'क्या आप सुनिश्चित हैं कि आप लॉगआउट करना चाहते हैं?'),
       confirmText: safeTranslate('secure_logout', 'LOGOUT', 'লগআউট', 'लॉगआउट'),
       isDanger: true,
@@ -564,17 +556,16 @@ export default function App() {
     );
   }
 
-  // ✨ CENTRAL ROUTER
+  // ✨ CENTRAL ROUTER (Unlocked Pooja tab for all workspaces)
   const renderContent = () => {
     switch (activeTab) {
       case 'home': return <DashboardHome session={activeSession} setActiveTab={setActiveTab} isOnline={isOnline} />;
-      case 'plugin': return <PluginComponent session={activeSession} isOnline={isOnline} />; 
+      case 'pooja': return <PoojaBookingDesk session={activeSession} isOnline={isOnline} />; 
       case 'directory': return <DevoteeGrid session={activeSession} isOnline={isOnline} />; 
       case 'guests': return <GuestManager session={activeSession} isOnline={isOnline} />;
       case 'vivah': return <VivahBandhanDesk session={activeSession} isOnline={isOnline} />; 
       case 'vanshavali': return <VanshavaliDesk session={activeSession} isOnline={isOnline} />; 
       case 'shradh': return <PitruShradhDesk session={activeSession} isOnline={isOnline} />; 
-      case 'pooja': return <PoojaBookingDesk session={activeSession} isOnline={isOnline} />; 
       case 'treasury': return <TreasuryLedger session={activeSession} isOnline={isOnline} />;
       case 'prachar': return <SandeshDesk session={activeSession} isOnline={isOnline} />;
       case 'panjika': return <UtsavPanjika session={activeSession} isOnline={isOnline} />;
@@ -639,7 +630,8 @@ export default function App() {
           <div className="mb-4">
              <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2">{safeTranslate('nav_group_core', 'Core Workspace', 'মূল ওয়ার্কস্পেস', 'कोर कार्यक्षेत्र')}</h4>
              <NavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18} />} label={safeTranslate('nav_home', 'Dashboard', 'ড্যাশবোর্ড', 'डैशबोर्ड')} />
-             <NavItem active={activeTab === 'plugin'} onClick={() => setActiveTab('plugin')} icon={<PluginIcon size={18} />} label={isPurohitMode ? safeTranslate('my_ritual_diary', 'My Ritual Diary', 'আমার রিচুয়াল ডায়েরি', 'मेरी अनुष्ठान डायरी') : safeTranslate('nav_pooja', activePlugin.navTitle, 'পূজা ও সেবা ডেস্ক', 'पूजा और सेवा डेस्क')} isSpecial={true} activePlugin={activePlugin} />
+             {/* ✨ UNIVERSALLY UNLOCKED POOJA & PUROHIT MARKETPLACE TAB */}
+             <NavItem active={activeTab === 'pooja'} onClick={() => setActiveTab('pooja')} icon={<Flame size={18} />} label={isPurohitMode ? safeTranslate('my_ritual_diary', 'My Ritual Diary', 'আমার রিচুয়াল ডায়েরি', 'मेरी अनुष्ठान डायरी') : safeTranslate('nav_pooja', 'Pooja & Seva Desk', 'পূজা ও সেবা ডেস্ক', 'पूजा और सेवा डेस्क')} isSpecial={true} activePlugin={{bg: 'bg-orange-50', accent: 'text-sanatani-orange', border: 'border-orange-100'}} />
           </div>
 
           <div className="mb-4">
@@ -684,7 +676,7 @@ export default function App() {
              <div className="flex-1 overflow-y-auto p-4 space-y-1.5 scrollbar-hide">
                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-2">{safeTranslate('nav_group_core', 'Core Workspace', 'মূল ওয়ার্কস্পেস', 'कोर कार्यक्षेत्र')}</h4>
                <NavItem active={activeTab === 'home'} onClick={() => { setActiveTab('home'); setMobileMenuOpen(false); }} icon={<LayoutDashboard size={18} />} label={safeTranslate('nav_home', 'Dashboard', 'ড্যাশবোর্ড', 'डैशबोर्ड')} />
-               <NavItem active={activeTab === 'plugin'} onClick={() => { setActiveTab('plugin'); setMobileMenuOpen(false); }} icon={<PluginIcon size={18} />} label={isPurohitMode ? safeTranslate('my_ritual_diary', 'My Ritual Diary', 'আমার রিচুয়াল ডায়েরি', 'मेरी अनुष्ठान डायरी') : safeTranslate('nav_pooja', activePlugin.navTitle, 'পূজা ও সেবা ডেস্ক', 'पूजा और सेवा डेस्क')} isSpecial={true} activePlugin={activePlugin} />
+               <NavItem active={activeTab === 'pooja'} onClick={() => { setActiveTab('pooja'); setMobileMenuOpen(false); }} icon={<Flame size={18} />} label={isPurohitMode ? safeTranslate('my_ritual_diary', 'My Ritual Diary', 'আমার রিচুয়াল ডায়েরি', 'मेरी अनुष्ठान डायरी') : safeTranslate('nav_pooja', 'Pooja & Seva Desk', 'পূজা ও সেবা ডেস্ক', 'पूजा और सेवा डेस्क')} isSpecial={true} activePlugin={{bg: 'bg-orange-50', accent: 'text-sanatani-orange', border: 'border-orange-100'}} />
 
                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">{safeTranslate('nav_group_community', 'Community & CRM', 'কমিউনিটি এবং সিআরএম', 'समुदाय और सीआरएम')}</h4>
                <NavItem active={activeTab === 'feed'} onClick={() => { setActiveTab('feed'); setMobileMenuOpen(false); }} icon={<Sparkles size={18} />} label={safeTranslate('community_feed', 'Darshan & Feed', 'দর্শন ও ফিড', 'दर्शन और फीड')} />
@@ -695,11 +687,11 @@ export default function App() {
                {isDhamOrAshram && <NavItem active={activeTab === 'shradh'} onClick={() => { setActiveTab('shradh'); setMobileMenuOpen(false); }} icon={<ScrollText size={18} />} label={safeTranslate('nav_shradh', 'Pitru Shradh', 'পিতৃ শ্রাদ্ধ', 'पितृ श्राद्ध')} />}
 
                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">{safeTranslate('nav_group_finance', 'Finance & Events', 'অর্থ ও ইভেন্ট', 'वित्त और कार्यक्रम')}</h4>
-               <NavItem active={activeTab === 'treasury'} onClick={() => { setActiveTab('treasury'); setMobileMenuOpen(false); }} icon={<Banknote size={18} />} label={safeTranslate('nav_treasury', 'Treasury Ledger', 'ট্রেজারি লেজার', 'ट्रेजरी लेजर')} />
+               <NavItem active={activeTab === 'treasury'} onClick={() => { setActiveTab('treasury'); setMobileMenuOpen(false); }} icon={<Banknote size={18} />} label={safeTranslate('nav_treasury', 'Treasury Ledger', 'ট্রেজারি লেজার', 'ট्रेजरी लेजर')} />
                {!isPurohitMode && <NavItem active={activeTab === 'panjika'} onClick={() => { setActiveTab('panjika'); setMobileMenuOpen(false); }} icon={<CalendarDays size={18} />} label={safeTranslate('nav_panjika', 'Panjika Events', 'পঞ্জিকা ইভেন্ট', 'पंचांग घटनाएँ').split('&')[0]} />}
 
                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">{safeTranslate('nav_group_settings', 'Outreach & Settings', 'আউটরিচ এবং সেটিংস', 'आउटरीच और सेटिंग्स')}</h4>
-               {!isPurohitMode && <NavItem active={activeTab === 'prachar'} onClick={() => { setActiveTab('prachar'); setMobileMenuOpen(false); }} icon={<Megaphone size={18} />} label={safeTranslate('nav_prachar', 'Broadcast', 'সম্প্রচার', 'প্রसारण')} />}
+               {!isPurohitMode && <NavItem active={activeTab === 'prachar'} onClick={() => { setActiveTab('prachar'); setMobileMenuOpen(false); }} icon={<Megaphone size={18} />} label={safeTranslate('nav_prachar', 'Broadcast', 'সম্প্রচার', 'प्रसारण')} />}
                {!isPurohitMode && <NavItem active={activeTab === 'polls'} onClick={() => { setActiveTab('polls'); setMobileMenuOpen(false); }} icon={<BarChart2 size={18} />} label={safeTranslate('nav_polls', 'Community Voting', 'কমিউনিটি ভোটিং', 'सामुदायिक मतदान')} />}
                {!isPurohitMode && isStaff && <NavItem active={activeTab === 'marketing'} onClick={() => { setActiveTab('marketing'); setMobileMenuOpen(false); }} icon={<Flame size={18} />} label={safeTranslate('nav_marketing', 'Social Assistant', 'সোশ্যাল অ্যাসিস্ট্যান্ট', 'सोशल असिस्टेंट')} />}
                <div className="my-2 border-t border-gray-100"></div>
@@ -837,7 +829,7 @@ export default function App() {
                           <button 
                              onClick={() => {
                                 setIsPurohitMode(!isPurohitMode);
-                                setActiveTab('plugin');
+                                setActiveTab('pooja');
                                 setShowProfileMenu(false);
                                 showToast(isPurohitMode ? "Switched to Devotee Workspace" : "Switched to Global Purohit Dashboard");
                              }}
@@ -897,7 +889,7 @@ export default function App() {
       {/* 📱 MOBILE BOTTOM NAVIGATION */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur-md border-t border-gray-200 flex items-center justify-around pb-safe pt-2 px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
         <MobileNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={20} />} label={safeTranslate('nav_home', 'Dashboard', 'ড্যাশবোর্ড', 'डैशबोर्ड').split(' ')[0]} />
-        <MobileNavItem active={activeTab === 'plugin'} onClick={() => setActiveTab('plugin')} icon={<PluginIcon size={20} />} label={isPurohitMode ? 'Diary' : activePlugin.navTitle.split(' ')[0]} isSpecial={true} activePlugin={activePlugin} />
+        <MobileNavItem active={activeTab === 'pooja'} onClick={() => setActiveTab('pooja')} icon={<Flame size={20} />} label={isPurohitMode ? 'Diary' : safeTranslate('nav_pooja', 'Pooja', 'পূজা', 'पूजा').split(' ')[0]} isSpecial={true} activePlugin={{bg: 'bg-orange-50', accent: 'text-sanatani-orange', border: 'border-orange-100'}} />
         <MobileNavItem active={activeTab === 'directory'} onClick={() => setActiveTab('directory')} icon={<Users size={20} />} label={safeTranslate('nav_directory', 'Directory', 'ডিরেক্টরি', 'निर्देशिका').split(' ')[0]} />
         <MobileNavItem active={activeTab === 'treasury'} onClick={() => setActiveTab('treasury')} icon={<Banknote size={20} />} label={safeTranslate('nav_treasury', 'Treasury', 'ট্রেজারি', 'ट्रेजरी').split(' ')[0]} />
         <MobileNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={20} />} label={safeTranslate('nav_settings', 'Settings', 'সেটিংস', 'सेटिंग्स').split(' ')[0]} />
@@ -1231,7 +1223,7 @@ export default function App() {
                             onClick={() => { 
                               setIsPurohitMode(true); 
                               setShowProfileModal(false); 
-                              setActiveTab('plugin'); 
+                              setActiveTab('pooja'); 
                             }}
                             className="bg-white hover:bg-gray-50 border border-gray-200 text-orange-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-sm"
                           >
@@ -1380,7 +1372,6 @@ export default function App() {
       , document.body)}
 
       {/* ✨ GLOBAL PUROHIT KYC APPLICATION MODAL */}
-      {/* 🚀 FIX: The entire modal body and footer are now wrapped inside <form> so native submission works */}
       {showKycModal && createPortal(
         <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-md z-[10500] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 ring-1 ring-white/20 relative overflow-hidden flex flex-col max-h-[95dvh]">
