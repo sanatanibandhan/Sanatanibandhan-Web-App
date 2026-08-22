@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sanatani Bandhan</string>
+    <string name="title_activity_main">Sanatani Bandhan</string>
+    <string name="package_name">com.sanatani.bandhan</string>
+    <string name="custom_url_scheme">com.sanatani.bandhan</string>
+</resources>
