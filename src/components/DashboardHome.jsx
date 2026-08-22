@@ -10,7 +10,7 @@ import {
   Users, Banknote, CalendarDays, Activity, TrendingUp,
   ShieldCheck, Crown, Megaphone, Loader2, UserPlus, 
   Quote, BookOpen, WifiOff, Lock, Unlock, 
-  CheckCircle, XCircle, Filter, Download, HelpCircle, 
+  CheckCircle, CheckCircle2, XCircle, Filter, Download, HelpCircle, 
   FileDown, FileText, Heart, Shield, Sparkles, PlusCircle, 
   Wallet, Flame, HeartHandshake, BellRing, UserCheck, ShieldAlert,
   ArrowRight
@@ -18,33 +18,42 @@ import {
 import { usePlanGate } from '../hooks/usePlanGate';
 
 export default function DashboardHome({ session, isOnline = navigator.onLine, setActiveTab }) {
-  const { t, getArray, workspaceType } = useLanguage(); 
+  const { t, language, getArray, workspaceType } = useLanguage(); 
   const { checkQuota } = usePlanGate(session);
 
   const [loading, setLoading] = useState(true);
   const [showQuickGuide, setShowQuickGuide] = useState(false);
+
+  // ✨ FAIL-SAFE TRANSLATION HELPER
+  const safeTranslate = (key, fallbackEn, fallbackBn, fallbackHi) => {
+    const trans = t(key);
+    if (trans !== key && trans) return trans;
+    if (language === 'bn') return fallbackBn;
+    if (language === 'hi') return fallbackHi;
+    return fallbackEn;
+  };
 
   // ✨ Dynamic Institution Label mapping
   const orgType = session?.type || session?.workspaceType || workspaceType || 'Mandir';
   const isPurohitMode = orgType === 'Purohit';
 
   const institutionLabel = useMemo(() => {
-    if (isPurohitMode) return t('purohit_desk') || 'Purohit Desk';
+    if (isPurohitMode) return safeTranslate('purohit_desk', 'Purohit Desk', 'পুরোহিত ডেস্ক', 'पुरोहित डेस्क');
     const rawType = String(orgType).toUpperCase();
     switch (rawType) {
-      case 'GOSHALA': return t('workspace_goshala') || 'Goshala';
-      case 'SANGHA': return t('workspace_sangha') || 'Sangha';
-      case 'ASHRAM': return t('workspace_ashram') || 'Ashram';
-      case 'GURUKUL': return t('workspace_gurukul') || 'Gurukul';
-      case 'SATSANG': return t('workspace_satsang') || 'Satsang';
-      case 'YOGA': return t('workspace_yoga') || 'Yoga Center';
-      case 'TRUST': return t('workspace_trust') || 'Trust';
-      case 'TIRTH': return t('workspace_tirth') || 'Tirth / Dham';
-      case 'SAMAJ': return t('workspace_samaj') || 'Samaj';
+      case 'GOSHALA': return safeTranslate('workspace_goshala', 'Goshala', 'গোশালা', 'गौशाला');
+      case 'SANGHA': return safeTranslate('workspace_sangha', 'Sangha', 'সংঘ', 'संघ');
+      case 'ASHRAM': return safeTranslate('workspace_ashram', 'Ashram', 'আশ্রম', 'आश्रम');
+      case 'GURUKUL': return safeTranslate('workspace_gurukul', 'Gurukul', 'গুরকুল', 'गुरुकुल');
+      case 'SATSANG': return safeTranslate('workspace_satsang', 'Satsang', 'সৎসঙ্গ', 'सत्संग');
+      case 'YOGA': return safeTranslate('workspace_yoga', 'Yoga Center', 'যোগ কেন্দ্র', 'योग केंद्र');
+      case 'TRUST': return safeTranslate('workspace_trust', 'Trust', 'ট্রাস্ট', 'ट्रस्ट');
+      case 'TIRTH': return safeTranslate('workspace_tirth', 'Tirth / Dham', 'তীর্থ', 'तीर्थ');
+      case 'SAMAJ': return safeTranslate('workspace_samaj', 'Samaj', 'সমাজ', 'समाज');
       case 'MANDIR':
-      default: return t('workspace_mandir') || 'Mandir';
+      default: return safeTranslate('workspace_mandir', 'Mandir', 'মন্দির', 'मंदिर');
     }
-  }, [orgType, t, isPurohitMode]);
+  }, [orgType, language, isPurohitMode]);
 
   // ✨ Dynamic Multi-Lingual Shloka State
   const quotesList = getArray('quotes');
@@ -59,7 +68,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
     try { return JSON.parse(localStorage.getItem(`sb_pstats_${session.uid}`)) || { myDonations: 0 }; } 
     catch { return { myDonations: 0 }; }
   });
-  
+
   // Smart Widget States
   const [vivahStats, setVivahStats] = useState({ totalProfiles: 0, pendingRequests: 0 });
   const [poojaStats, setPoojaStats] = useState({ upcomingRituals: 0, nextEvent: null });
@@ -80,16 +89,23 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
 
   const [myAccessStatus, setMyAccessStatus] = useState('RESTRICTED'); 
   const [auditFilters, setAuditFilters] = useState({ actionType: 'ALL', startDate: '', endDate: '' });
+  
+  // ✨ ENTERPRISE TOAST ENGINE
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const curSymbol = session?.currency?.symbol || '৳';
 
   // Greeting Logic based on Time
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return t('suprabhat') || 'Suprabhat'; 
-    if (hour < 17) return t('namaskar') || 'Namaskar';  
-    return t('shubha_sandhya') || 'Shubha Sandhya';           
-  }, [t]);
+    if (hour < 12) return safeTranslate('suprabhat', 'Suprabhat', 'সুপ্রভাত', 'सुप्रभात'); 
+    if (hour < 17) return safeTranslate('namaskar', 'Namaskar', 'নমস্কার', 'नमस्कार');  
+    return safeTranslate('shubha_sandhya', 'Shubha Sandhya', 'শুভ সন্ধ্যা', 'शुभ संध्या');           
+  }, [language]);
 
   useEffect(() => {
     if(quotesList.length > 0) {
@@ -97,12 +113,20 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
     }
   }, [quotesList]);
 
+  // 🚀 FIXED: Removed window.alert to strictly enforce "ZERO NATIVE POPUPS" rule
   const executeSafeUpdate = async (updates, successMsg = null) => {
-    const updatePromise = update(ref(db), updates).catch(e => console.error("Offline Sync Queued:", e));
-    if (!isOnline && successMsg) {
-      alert(`📶 OFFLINE MODE SAVED!\n\n${successMsg}\n\nThis will permanently sync to the server the moment your internet reconnects.`);
+    if (!isOnline) {
+      update(ref(db), updates).catch(e => console.error("Offline Sync Queued:", e));
+      showToast(successMsg ? successMsg + ' (Saved Offline)' : safeTranslate('offline_saved', 'Action cached offline.', 'অফলাইনে সেভ করা হয়েছে।', 'ऑफ़लाइन सहेजा गया।'), 'offline');
+      return Promise.resolve();
     }
-    return updatePromise;
+    try {
+      await update(ref(db), updates);
+      if (successMsg) showToast(successMsg, 'success');
+    } catch (e) {
+      showToast(safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') + ": " + e.message, 'error');
+      throw e;
+    }
   };
 
   // ✨ CORE DATA SYNCHRONIZATION WITH CACHING
@@ -160,7 +184,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
       if (snap.exists()) {
         const events = Object.values(snap.val()).filter(e => e.status !== 'CONCLUDED');
         events.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        
+
         events.forEach(e => { 
           const evTime = new Date(e.dateStr || e.timestamp).getTime();
           if (evTime >= now.getTime()) {
@@ -169,7 +193,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
           }
         });
       }
-      
+
       setPanjikaNext(nextEv);
       setGlobalStats(s => {
         const newStats = { ...s, activeEvents: active };
@@ -266,7 +290,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
   // Gamification Setup Progress Calculation
   const setupProgress = useMemo(() => {
     let score = 0;
-    if (globalStats.devotees > 1) score += 25; // More than just the admin
+    if (globalStats.devotees > 1) score += 25; 
     if (globalStats.income > 0) score += 25;
     if (globalStats.activeEvents > 0) score += 25;
     if (recentLogs.length > 2) score += 25;
@@ -282,10 +306,10 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
         id: newReqKey, uid: session.uid, userName: session.userName, requestType: 'FULL_LEDGER_ACCESS', status: 'PENDING', timestamp: serverTimestamp() 
       };
 
-      await executeSafeUpdate(updates, t('req_submitted') || "Access request queued offline.");
+      await executeSafeUpdate(updates, safeTranslate('req_submitted', 'Access request queued offline.'));
       setMyAccessStatus('PENDING');
       pushToDataLayer('request_data_access', { request_type: 'FULL_LEDGER_ACCESS' });
-    } catch (e) { alert("Failed to push request. " + e.message); }
+    } catch (e) { showToast("Failed to push request. " + e.message, "error"); }
   };
 
   const handleAccessDecision = async (reqId, decision, uid, userName) => {
@@ -304,9 +328,9 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
         timestamp: serverTimestamp()
       };
 
-      await executeSafeUpdate(updates, `Access decision (${decision}) queued offline.`);
+      await executeSafeUpdate(updates, `Access decision (${decision}) processed.`);
       pushToDataLayer('handle_access_request', { target_user: uid, decision: decision });
-    } catch (e) { alert("Failed to process request."); }
+    } catch (e) { showToast("Failed to process request.", "error"); }
   };
 
   const filteredLogs = recentLogs.filter(log => {
@@ -398,12 +422,28 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
   return (
     <div className="space-y-6 fade-in pb-12 relative w-full">
 
+      {/* ✨ TOAST PORTAL */}
+      {toast && createPortal(
+        <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-[10000] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 ${toast.type === 'error' ? 'bg-red-900' : 'bg-gray-900'} text-white`}>
+           <div className={`p-2 rounded-full shrink-0 ${toast.type === 'offline' ? 'bg-orange-500/20 text-sanatani-orange' : toast.type === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+             {toast.type === 'offline' ? <WifiOff size={20}/> : toast.type === 'error' ? <AlertTriangle size={20}/> : <CheckCircle2 size={20}/>}
+           </div>
+           <div>
+             <p className={`text-xs font-black uppercase tracking-widest mb-0.5 ${toast.type === 'offline' ? 'text-orange-400' : toast.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+               {toast.type === 'offline' ? 'Offline Cache' : toast.type === 'error' ? safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') : safeTranslate('success', 'Success', 'সফল', 'सफल')}
+             </p>
+             <p className="text-sm font-bold">{toast.message}</p>
+           </div>
+        </div>,
+        document.body
+      )}
+
       {/* QUICK GUIDE MODAL */}
       {showQuickGuide && createPortal(
         <div className="fixed inset-0 bg-gray-950/80 backdrop-blur-md z-[10000] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden fade-in relative ring-1 ring-white/20 p-8 border-t-4 border-sanatani-orange">
             <button onClick={() => setShowQuickGuide(false)} className="absolute top-5 right-5 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full transition-colors"><XCircle size={20}/></button>
-            <h3 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2"><HelpCircle className="text-sanatani-orange"/> {t('quick_guide_title') || 'Command Center Guide'}</h3>
+            <h3 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2"><HelpCircle className="text-sanatani-orange"/> {safeTranslate('quick_guide_title', 'Command Center Guide', 'কমান্ড সেন্টার গাইড', 'कमांड सेंटर गाइड')}</h3>
             <div className="space-y-4 text-sm font-bold text-gray-600 leading-relaxed">
               <p><strong>1. Interconnected Metrics:</strong> Tap any Quick Action shortcut (like Log Chanda or Schedule Event) to instantly jump to its specific management module.</p>
               <p><strong>2. Smart Widgets:</strong> The central dashboard pulls live data from your Panjika, Matrimonial, and Ritual modules to give you a bird's-eye view of your ecosystem.</p>
@@ -423,17 +463,17 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border backdrop-blur-md shadow-sm ${isPurohitMode ? 'bg-red-500/20 text-red-300 border-red-500/20' : 'bg-white/10 text-orange-400 border-white/10'}`}>
-                {isPurohitMode ? t('global_scholar') || 'Global Scholar' : `${institutionLabel} Workspace`}
+                {isPurohitMode ? safeTranslate('global_scholar', 'Global Scholar', 'গ্লোবাল স্কলার', 'ग्लोबल स्कॉलर') : `${institutionLabel} Workspace`}
               </span>
               <button onClick={() => {setShowQuickGuide(true); pushToDataLayer('open_quick_guide', { module: 'DashboardHome' });}} className="text-[10px] font-black uppercase tracking-widest bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full border border-blue-500/20 hover:bg-blue-500/40 transition-colors flex items-center gap-1 shadow-sm">
-                 <HelpCircle size={10}/> {t('quick_guide') || 'Guide'}
+                 <HelpCircle size={10}/> {safeTranslate('quick_guide', 'Guide', 'গাইড', 'गाइड')}
               </button>
             </div>
             <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-2">
               {greeting}, {session?.userName?.split(' ')[0]}! 🙏
             </h1>
             <p className="text-xs font-bold text-gray-400 max-w-lg leading-relaxed">
-              {t('welcome_to') || 'Welcome to the'} <strong className="text-white">{session?.communityName}</strong> {t('command_center_desc') || 'command center. Here is what is happening across your network today.'}
+              {safeTranslate('welcome_to', 'Welcome to the', 'স্বাগতম', 'में आपका स्वागत है')} <strong className="text-white">{session?.communityName}</strong> {safeTranslate('command_center_desc', 'command center. Here is what is happening across your network today.', 'কমান্ড সেন্টারে। আজ আপনার নেটওয়ার্কে যা ঘটছে তা এখানে রয়েছে।', 'कमांड सेंटर। आज आपके नेटवर्क में क्या हो रहा है, यह यहां है।')}
             </p>
           </div>
 
@@ -441,7 +481,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
           {setupProgress < 100 && isAdmin ? (
             <div className="bg-white/10 backdrop-blur-md border border-white/10 p-4 rounded-2xl md:w-64 shrink-0 shadow-lg animate-in slide-in-from-right-4">
               <div className="flex justify-between items-end mb-2">
-                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{t('setup_progress') || 'Setup Progress'}</p>
+                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{safeTranslate('setup_progress', 'Setup Progress', 'সেটআপের অগ্রগতি', 'सेटअप प्रगति')}</p>
                 <p className="text-sm font-black text-sanatani-orange">{setupProgress}%</p>
               </div>
               <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
@@ -467,8 +507,8 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
           <div className="flex items-center gap-4">
             <div className="bg-white/10 p-3 rounded-2xl border border-white/5"><Lock className="text-sanatani-orange" size={24}/></div>
             <div>
-              <h3 className="text-lg font-black tracking-tight">{t('global_ledger_locked') || 'Global Ledger Locked'}</h3>
-              <p className="text-xs text-gray-400 font-bold">{t('global_ledger_desc') || 'You are in Personal Mode. Community figures are hidden for security.'}</p>
+              <h3 className="text-lg font-black tracking-tight">{safeTranslate('global_ledger_locked', 'Global Ledger Locked', 'গ্লোবাল লেজার লকড', 'ग्लोबल लेजर लॉक्ड')}</h3>
+              <p className="text-xs text-gray-400 font-bold">{safeTranslate('global_ledger_desc', 'You are in Personal Mode. Community figures are hidden for security.', 'আপনি ব্যক্তিগত মোডে আছেন। নিরাপত্তার জন্য সম্প্রদায়ের পরিসংখ্যান লুকানো হয়েছে।', 'आप व्यक्तिगत मोड में हैं। सुरक्षा के लिए सामुदायिक आंकड़े छिपाए गए हैं।')}</p>
             </div>
           </div>
           <button 
@@ -476,7 +516,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
             disabled={myAccessStatus === 'PENDING'}
             className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 disabled:opacity-50 disabled:transform-none text-white text-xs font-black uppercase tracking-widest px-6 py-3.5 rounded-xl shadow-lg transition-all hover:-translate-y-0.5"
           >
-            {myAccessStatus === 'PENDING' ? (t('request_pending') || 'Request Pending...') : (t('request_global_access') || 'Request Global Access')}
+            {myAccessStatus === 'PENDING' ? (safeTranslate('request_pending', 'Request Pending...', 'অনুরোধ অপেক্ষমান...', 'अनुरोध लंबित...')) : (safeTranslate('request_global_access', 'Request Global Access', 'গ্লোবাল অ্যাক্সেস অনুরোধ করুন', 'ग्लोबल एक्सेस का अनुरोध करें'))}
           </button>
         </div>
       )}
@@ -487,7 +527,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
            <div className="absolute top-0 right-0 -mr-4 -mt-4 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={100}/></div>
            <div className="h-14 w-14 mb-4 bg-gradient-to-br from-orange-50 to-orange-100 text-sanatani-orange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-orange-200 relative z-10"><Users size={26} /></div>
            <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight relative z-10">{globalStats.devotees.toLocaleString()}</p>
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Total {t('members') || 'Members'}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Total {safeTranslate(workspaceType === 'Goshala' ? 'gau_sevaks' : 'members', 'Members', 'সদস্য', 'सदस्य')}</p>
         </div>
 
         <div className={`bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden ${hasGlobalAccess ? 'cursor-default hover:border-green-400 hover:shadow-xl' : ''}`}>
@@ -498,47 +538,47 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
            <p className={`text-2xl sm:text-3xl font-black tracking-tight relative z-10 ${hasGlobalAccess ? (treasuryBalance >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-300 filter blur-sm'}`}>
                {curSymbol}{hasGlobalAccess ? Math.abs(treasuryBalance).toLocaleString() : 'XXX,XXX'}
            </p>
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Net {t('nav_treasury')?.split('&')[0] || 'Treasury'}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Net {safeTranslate('nav_treasury', 'Treasury', 'ট্রেজারি', 'ट्रेजरी')?.split('&')[0]}</p>
         </div>
 
         <div className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center cursor-default group hover:border-blue-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
            <div className="absolute top-0 right-0 -mr-4 -mt-4 opacity-5 group-hover:opacity-10 transition-opacity"><TrendingUp size={100}/></div>
            <div className="h-14 w-14 mb-4 bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-blue-200 relative z-10"><TrendingUp size={26} /></div>
            <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight truncate w-full relative z-10">{curSymbol}{hasGlobalAccess ? globalStats.income.toLocaleString() : personalStats.myDonations.toLocaleString()}</p>
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">{hasGlobalAccess ? `Lifetime ${t('funds') || 'Funds'}` : 'My Lifetime'}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">{hasGlobalAccess ? `Lifetime ${safeTranslate('funds', 'Funds', 'তহবিল', 'निधि')}` : safeTranslate('my_lifetime', 'My Lifetime', 'আমার আজীবন', 'मेरा आजीवन')}</p>
         </div>
 
         <div className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center cursor-default group hover:border-purple-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
            <div className="absolute top-0 right-0 -mr-4 -mt-4 opacity-5 group-hover:opacity-10 transition-opacity"><CalendarDays size={100}/></div>
            <div className="h-14 w-14 mb-4 bg-gradient-to-br from-purple-50 to-fuchsia-100 text-purple-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-purple-200 relative z-10"><CalendarDays size={26} /></div>
            <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight relative z-10">{globalStats.activeEvents}</p>
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Active {t('nav_panjika')?.split('&')[0] || 'Events'}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Active {safeTranslate('nav_panjika', 'Events', 'ইভেন্ট', 'घटनाएँ')?.split('&')[0]}</p>
         </div>
       </div>
 
       {/* 🚀 COMMAND SHORTCUTS MATRIX */}
       {hasGlobalAccess && !isPurohitMode && (
         <div className="bg-gray-50/80 border border-gray-200 rounded-3xl p-5 sm:p-6 shadow-sm">
-          <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Activity size={14}/> {t('command_shortcuts') || 'Command Shortcuts'}</h3>
+          <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Activity size={14}/> {safeTranslate('command_shortcuts', 'Command Shortcuts', 'কমান্ড শর্টকাট', 'कमांड शॉर्टकट्स')}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <button onClick={() => { if(setActiveTab) setActiveTab('directory'); pushToDataLayer('quick_action_click', { action: 'Add Member' }); }} className="bg-white border border-gray-200 hover:border-sanatani-orange hover:shadow-md p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
               <div className="bg-orange-50 text-sanatani-orange p-3 rounded-full group-hover:scale-110 transition-transform"><UserPlus size={20}/></div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">{t('btn_add_member') || 'Add Member'}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">Add {safeTranslate(workspaceType === 'Goshala' ? 'gau_sevaks' : 'members', 'Member', 'সদস্য', 'सदस्य')}</span>
             </button>
 
             <button onClick={() => { if(setActiveTab) setActiveTab('treasury'); pushToDataLayer('quick_action_click', { action: 'Log Chanda' }); }} className="bg-white border border-gray-200 hover:border-green-500 hover:shadow-md p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
               <div className="bg-green-50 text-green-600 p-3 rounded-full group-hover:scale-110 transition-transform"><Wallet size={20}/></div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">{t('btn_log_chanda') || 'Log Chanda'}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">{safeTranslate('btn_log_chanda', 'Log Chanda', 'তহবিল যোগ করুন', 'योगदान दर्ज करें')}</span>
             </button>
 
             <button onClick={() => { if(setActiveTab) setActiveTab('panjika'); pushToDataLayer('quick_action_click', { action: 'Schedule Event' }); }} className="bg-white border border-gray-200 hover:border-blue-500 hover:shadow-md p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
               <div className="bg-blue-50 text-blue-600 p-3 rounded-full group-hover:scale-110 transition-transform"><CalendarDays size={20}/></div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">{t('schedule_event') || 'New Event'}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">{safeTranslate('schedule_event', 'New Event', 'নতুন ইভেন্ট', 'नया इवेंट')}</span>
             </button>
 
             <button onClick={() => { if(setActiveTab) setActiveTab('prachar'); pushToDataLayer('quick_action_click', { action: 'Send Broadcast' }); }} className="bg-white border border-gray-200 hover:border-purple-500 hover:shadow-md p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
               <div className="bg-purple-50 text-purple-600 p-3 rounded-full group-hover:scale-110 transition-transform"><Megaphone size={20}/></div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">{t('btn_send_alert') || 'Send Alert'}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">{safeTranslate('btn_send_alert', 'Send Alert', 'অ্যালার্ট পাঠান', 'अलर्ट भेजें')}</span>
             </button>
           </div>
         </div>
@@ -547,14 +587,19 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
       {/* ✨ THE SUPER-APP WIDGET ZONE (Cross-Module Integrations) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-        {/* 🛕 PUROHIT / POOJA WIDGET */}
+        {/* 🛕 UNIVERSAL MARKETPLACE / POOJA WIDGET */}
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden flex flex-col group hover:shadow-md transition-shadow">
            <div className="flex justify-between items-start mb-4">
              <div className="bg-orange-50 text-orange-600 p-3 rounded-xl border border-orange-100"><Flame size={20}/></div>
              <button onClick={() => { if(setActiveTab) setActiveTab('pooja'); }} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-orange-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10}/></button>
            </div>
-           <h3 className="text-lg font-black text-gray-900 mb-1">{isPurohitMode ? 'My Ritual Diary' : (t('nav_pooja')?.split('&')[0] || 'Pooja Desk')}</h3>
-           <p className="text-xs font-bold text-gray-500 mb-4">{poojaStats.upcomingRituals} Active Reservations</p>
+           <h3 className="text-lg font-black text-gray-900 mb-1">{isPurohitMode ? safeTranslate('my_ritual_diary', 'My Ritual Diary', 'আমার রিচুয়াল ডায়েরি', 'मेरी अनुष्ठान डायरी') : isAdmin ? safeTranslate('universal_marketplace', 'Universal Marketplace', 'গ্লোবাল মার্কেটপ্লেস', 'यूनिवर्सल मार्केटप्लेस') : safeTranslate('nav_pooja', 'Pooja Desk', 'পূজা ডেস্ক', 'पूजा डेस्क')?.split('&')[0]}</h3>
+           
+           {isAdmin && !isPurohitMode ? (
+             <p className="text-xs font-bold text-gray-500 mb-4">Hire Global Scholars & Cover Leave</p>
+           ) : (
+             <p className="text-xs font-bold text-gray-500 mb-4">{poojaStats.upcomingRituals} Active Reservations</p>
+           )}
 
            <div className="mt-auto bg-gray-50 p-4 rounded-2xl border border-gray-100">
              {poojaStats.nextEvent ? (
@@ -575,11 +620,11 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
              <div className="bg-pink-50 text-pink-600 p-3 rounded-xl border border-pink-100"><HeartHandshake size={20}/></div>
              <button onClick={() => { if(setActiveTab) setActiveTab('vivah'); }} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-pink-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10}/></button>
            </div>
-           <h3 className="text-lg font-black text-gray-900 mb-1">{t('nav_vivah') || 'Vivah Bandhan'}</h3>
+           <h3 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('nav_vivah', 'Vivah Bandhan', 'বিবাহ বন্ধন', 'विवाह बंधन')}</h3>
            {isAdmin ? (
              <p className="text-xs font-bold text-gray-500 mb-4">{vivahStats.totalProfiles} Verified Profiles Active</p>
            ) : (
-             <p className="text-xs font-bold text-gray-500 mb-4">{t('vivah_subtitle')?.split('.')[0] || 'Sanatan Matchmaking'}</p>
+             <p className="text-xs font-bold text-gray-500 mb-4">{safeTranslate('vivah_subtitle', 'Sanatan Matchmaking', 'সনাতন ম্যাচমেকিং', 'सनातन मैचमेकिंग')?.split('.')[0]}</p>
            )}
 
            <div className="mt-auto bg-pink-50/50 p-4 rounded-2xl border border-pink-100 flex items-center justify-between">
@@ -599,7 +644,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
              <div className="bg-purple-50 text-purple-600 p-3 rounded-xl border border-purple-100"><CalendarDays size={20}/></div>
              <button onClick={() => { if(setActiveTab) setActiveTab('panjika'); }} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-purple-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10}/></button>
            </div>
-           <h3 className="text-lg font-black text-gray-900 mb-1">{t('nav_panjika')?.split('&')[0] || 'Utsav Panjika'}</h3>
+           <h3 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('nav_panjika', 'Utsav Panjika', 'উৎসব পঞ্জিকা', 'उत्सव पंचांग')?.split('&')[0]}</h3>
            <p className="text-xs font-bold text-gray-500 mb-4">{globalStats.activeEvents} Upcoming Events</p>
 
            <div className="mt-auto bg-purple-50/50 p-4 rounded-2xl border border-purple-100">
@@ -620,7 +665,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
       {/* ADMIN PERMISSION WORKFLOW: ACCESS REQUESTS PANEL */}
       {(session.role === 'ADMIN' || session.role === 'SUPER_ADMIN' || session.role === 'MANAGER') && accessRequests.length > 0 && (
         <div className="bg-orange-50 border border-orange-200 rounded-3xl p-6 shadow-sm animate-in slide-in-from-top-4">
-          <h3 className="text-sm font-black text-orange-900 mb-4 flex items-center gap-2"><Unlock size={18}/> Pending Ledger Access Requests</h3>
+          <h3 className="text-sm font-black text-orange-900 mb-4 flex items-center gap-2"><Unlock size={18}/> {safeTranslate('pending_ledger_access', 'Pending Ledger Access Requests', 'অপেক্ষমান লেজার অ্যাক্সেস অনুরোধ', 'लंबित खाता पहुंच अनुरोध')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {accessRequests.map(req => (
               <div key={req.id} className="bg-white p-4 rounded-2xl shadow-sm border border-orange-100 flex justify-between items-center">
@@ -629,7 +674,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{req.requestType.replace(/_/g, ' ')}</p>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleAccessDecision(req.id, 'APPROVED', req.uid, req.userName)} className="p-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl transition-colors"><CheckCircle size={18}/></button>
+                  <button onClick={() => handleAccessDecision(req.id, 'APPROVED', req.uid, req.userName)} className="p-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl transition-colors"><CheckCircle2 size={18}/></button>
                   <button onClick={() => handleAccessDecision(req.id, 'REJECTED', req.uid, req.userName)} className="p-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-xl transition-colors"><XCircle size={18}/></button>
                 </div>
               </div>
@@ -736,7 +781,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
 
             <div className="group">
               <div className="flex justify-between items-end mb-2">
-                <p className="text-xs font-bold text-gray-600 flex items-center gap-1.5"><Users size={14}/> Devotee Capacity</p>
+                <p className="text-xs font-bold text-gray-600 flex items-center gap-1.5"><Users size={14}/> {institutionLabel} Capacity</p>
                 <p className="text-sm font-black text-gray-900">{globalStats.devotees} <span className="text-[10px] text-gray-400 font-bold">/ {limits.plan === 'PREMIUM' ? '∞' : limits.maxMembers}</span></p>
               </div>
               <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden shadow-inner">
@@ -763,14 +808,14 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
             {limits.plan === 'FREE' && hasGlobalAccess && !isPurohitMode && (
               <div className="mt-4 p-5 bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-gray-800 text-left shadow-lg relative overflow-hidden group">
                  <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform"><Shield size={64}/></div>
-                 <h4 className="text-sm font-black text-white mb-2 relative z-10">{t('upgrade_title') || 'Ready to Scale?'}</h4>
+                 <h4 className="text-sm font-black text-white mb-2 relative z-10">{safeTranslate('upgrade_title', 'Ready to Scale?', 'স্কেল করতে প্রস্তুত?', 'स्केल करने के लिए तैयार हैं?')}</h4>
                  <ul className="text-[10px] font-bold text-gray-400 space-y-1.5 mb-4 relative z-10">
-                   <li className="flex items-center gap-2"><CheckCircle size={12} className="text-sanatani-orange"/> {t('upgrade_r1') || 'Unlimited Member Profiles'}</li>
-                   <li className="flex items-center gap-2"><CheckCircle size={12} className="text-sanatani-orange"/> {t('upgrade_r2') || 'Infinite Master PDF Reports'}</li>
-                   <li className="flex items-center gap-2"><CheckCircle size={12} className="text-sanatani-orange"/> {t('upgrade_r3') || 'Verified Organization Badge'}</li>
+                   <li className="flex items-center gap-2"><CheckCircle2 size={12} className="text-sanatani-orange"/> {safeTranslate('upgrade_r1', 'Unlimited Member Profiles', 'আনলিমিটেড সদস্য প্রোফাইল', 'असीमित सदस्य प्रोफाइल')}</li>
+                   <li className="flex items-center gap-2"><CheckCircle2 size={12} className="text-sanatani-orange"/> {safeTranslate('upgrade_r2', 'Infinite Master PDF Reports', 'আনলিমিটেড পিডিএফ রিপোর্ট', 'अनंत मास्टर पीडीएफ रिपोर्ट')}</li>
+                   <li className="flex items-center gap-2"><CheckCircle2 size={12} className="text-sanatani-orange"/> {safeTranslate('upgrade_r3', 'Verified Organization Badge', 'ভেরিফাইড অর্গানাইজেশন ব্যাজ', 'सत्यापित संगठन बैज')}</li>
                  </ul>
                  <button onClick={() => { if(setActiveTab) setActiveTab('settings'); pushToDataLayer('quick_action_click', { action: 'Upgrade Pro' }); }} className="w-full bg-white hover:bg-gray-100 text-gray-900 font-black py-3 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-md hover:shadow-lg relative z-10">
-                   {t('btn_upgrade_pro') || 'Upgrade to Smart Pro'}
+                   {safeTranslate('btn_upgrade_pro', 'Upgrade to Smart Pro', 'স্মার্ট প্রো-তে আপগ্রেড করুন', 'स्मार्ट प्रो में अपग्रेड करें')}
                  </button>
               </div>
             )}
