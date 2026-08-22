@@ -10,7 +10,7 @@ import {
   WifiOff, Heart, MessageSquare, Camera, CreditCard, QrCode, Mail, 
   History, Award, Star, ShieldCheck, FileText, Activity, Crown, Filter,
   HelpCircle, Lightbulb, FileDigit, FileDown, AlertTriangle, LayoutGrid, List, Ticket,
-  Ban, Flame, HeartHandshake
+  Ban, Flame, HeartHandshake, User // ✨ FIXED: Added missing User icon
 } from 'lucide-react';
 import { pushToDataLayer } from '../utils/gtm'; 
 import { usePlanGate } from '../hooks/usePlanGate';
@@ -66,6 +66,8 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
     return cached ? parseInt(cached, 10) : 0;
   });
 
+  const [globalPurohitsMap, setGlobalPurohitsMap] = useState({});
+
   const [loading, setLoading] = useState(!members.length);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -93,8 +95,9 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // ✨ ADDED: fatherName and motherName
   const [formData, setFormData] = useState({ 
-    name: '', phone: '', email: '', gotra: '', bloodGroup: '', 
+    name: '', phone: '', email: '', fatherName: '', motherName: '', gotra: '', bloodGroup: '', 
     country: '', nid: '', address: '', role: 'MEMBER', designation: '', photoUrl: '' 
   });
 
@@ -120,6 +123,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
   useEffect(() => {
     pushToDataLayer('view_directory', { user_role: session.role, community_id: session.communityId });
 
+    // Fetch Members
     const memRef = ref(db, `communities/${session.communityId}/members`);
     const unsubMem = onValue(memRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -135,6 +139,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       setLoading(false);
     });
 
+    // Fetch Devotee Count & Plan
     const infoRef = ref(db, `communities/${session.communityId}/info`);
     const unsubInfo = onValue(infoRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -144,13 +149,29 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       }
     });
 
+    // Fetch Global Limits
     const globalRef = ref(db, 'app_config/global_settings');
     const unsubGlobal = onValue(globalRef, (snap) => {
       if (snap.exists() && snap.val().free_member_limit !== undefined) setMemberLimit(snap.val().free_member_limit);
     });
 
+    // ✨ Fetch Global Purohits to cross-reference verified badges
+    const purohitRef = ref(db, 'global_purohits');
+    const unsubPurohit = onValue(purohitRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.val();
+        const map = {};
+        Object.values(data).forEach(p => {
+          if (p.verifiedBadge && p.phone) {
+            map[encodeIdentity(p.phone)] = p;
+          }
+        });
+        setGlobalPurohitsMap(map);
+      }
+    });
+
     const failsafe = setTimeout(() => setLoading(false), 1200);
-    return () => { unsubMem(); unsubInfo(); unsubGlobal(); clearTimeout(failsafe); };
+    return () => { unsubMem(); unsubInfo(); unsubGlobal(); unsubPurohit(); clearTimeout(failsafe); };
   }, [session.communityId, session.role]);
 
   useEffect(() => {
@@ -383,7 +404,6 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      // 🚀 CRITICAL FIX: Replaced "new Image()" with "document.createElement('img')" to prevent mobile WebView crashes
       const img = document.createElement('img');
       img.onload = async () => {
         const canvas = document.createElement('canvas');
@@ -442,7 +462,8 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
       const newMemberObj = {
         id: memberId, name: formData.name.trim(), phone: formData.phone.trim(), 
-        email: formData.email.trim(), gotra: formData.gotra.trim(), bloodGroup: formData.bloodGroup.trim(), 
+        email: formData.email.trim(), fatherName: formData.fatherName.trim(), motherName: formData.motherName.trim(),
+        gotra: formData.gotra.trim(), bloodGroup: formData.bloodGroup.trim(), 
         country: formData.country.trim(), nid: formData.nid.trim(), address: formData.address.trim(), 
         photoUrl: formData.photoUrl, role: formData.role, designation: formData.designation.trim(), 
         addedBySignature: `${session.role} - ${session.userName}`, totalDonated: 0, lastDonationAmount: 0,
@@ -468,7 +489,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       logAudit("MEMBER_ADDED", `Created profile and generated PIN for ${memberId}`);
 
       setShowAddModal(false);
-      setFormData({ name: '', phone: '', email: '', gotra: '', bloodGroup: '', country: '', nid: '', address: '', role: 'MEMBER', designation: '', photoUrl: '' });
+      setFormData({ name: '', phone: '', email: '', fatherName: '', motherName: '', gotra: '', bloodGroup: '', country: '', nid: '', address: '', role: 'MEMBER', designation: '', photoUrl: '' });
     } catch (err) { showToast(err.message, "error"); } finally { setSubmitting(false); }
   };
 
@@ -582,7 +603,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       }
 
       updates[`communities/${session.communityId}/members/${activeMember.id}/${field}`] = trimmedVal;
-      await executeSafeUpdate(updates, safeTranslate('record_updated', 'Record updated successfully.', 'সফলভাবে আপডেট করা হয়েছে।', 'सफलतापूर्वक अपडेट किया गया।'), "Profile update saved offline.");
+      await executeSafeUpdate(updates, safeTranslate('record_updated', 'Record updated successfully.', 'সফলভাবে আপডেট করা হয়েছে।', 'सफलतापूर्वक अपडेट किया गया。'), "Profile update saved offline.");
 
       pushToDataLayer('edit_member', { field_edited: field, community_id: session.communityId });
       logAudit("MEMBER_EDITED", `Updated ${displayName} for ${activeMember.id}`);
@@ -809,7 +830,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
       </div>
 
       {/* ========================================================================= */}
-      {/* VIEW 1: GRID MODE                                                         */}
+      {/* ✨ VIEW 1: ENTERPRISE GRID MODE (UPGRADED ID CARD STYLE)                 */}
       {/* ========================================================================= */}
       {viewMode === 'GRID' && (
         <>
@@ -818,41 +839,71 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
               currentDevotees.map(m => {
                 const liveScore = calculateSevaScore(m.totalDonated, 0, m.attendanceCount); 
                 const halo = getHaloDesign(liveScore);
+                
+                // ✨ Check if this member is a Verified Global Scholar
+                const isVerifiedPurohit = m.phone && globalPurohitsMap[encodeIdentity(m.phone)];
 
                 return (
-                  <div key={m.id} onClick={() => setActiveMember(m)} className="bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer relative overflow-hidden group">
-                    <div className={`absolute top-0 left-0 w-full h-1.5 transition-colors ${m.role === 'ADMIN' ? 'bg-red-500' : m.role === 'MANAGER' ? 'bg-blue-500' : 'bg-gray-200 group-hover:bg-sanatani-orange'}`}></div>
+                  <div key={m.id} onClick={() => setActiveMember(m)} className="bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col cursor-pointer relative overflow-hidden group">
+                    
+                    {/* Top Color Bar Indicator */}
+                    <div className={`h-1.5 w-full transition-colors ${m.role === 'ADMIN' ? 'bg-red-500' : m.role === 'MANAGER' ? 'bg-blue-500' : 'bg-gray-200 group-hover:bg-sanatani-orange'}`}></div>
 
-                    <div>
-                      <div className="flex justify-between items-start mb-5">
-                        <div className={`w-16 h-16 rounded-full p-1 bg-gradient-to-tr ${halo.color} shadow-md shrink-0`}>
-                          <div className="bg-white rounded-full h-full w-full overflow-hidden border-2 border-white flex items-center justify-center">
-                            {m.photoUrl ? (
-                              <img src={m.photoUrl} alt={m.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="text-2xl font-black text-gray-400">{m.name ? m.name.charAt(0).toUpperCase() : 'ॐ'}</span>
-                            )}
-                          </div>
-                        </div>
-                        <span className={`text-[8px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm ${m.role === 'ADMIN' ? 'bg-red-50 text-red-700 border-red-200' : m.role === 'MANAGER' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                          {safeTranslate('sys_role', 'Sys', 'রোল', 'रोल')}: {m.role || 'MEMBER'}
-                        </span>
+                    {/* ID Card Header */}
+                    <div className="p-5 flex flex-col items-center border-b border-gray-50 relative bg-gradient-to-b from-gray-50/50 to-transparent">
+                       
+                       {/* Floating Badges */}
+                       <div className="absolute top-4 left-4">
+                          <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-md border shadow-sm ${m.role === 'ADMIN' ? 'bg-red-50 text-red-700 border-red-200' : m.role === 'MANAGER' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border-gray-200'}`}>
+                            {safeTranslate('sys_role', 'Sys Role', 'সিস্টেম রোল', 'सिस्टम रोल')}: {m.role || 'MEMBER'}
+                          </span>
+                       </div>
+
+                       {isVerifiedPurohit && (
+                         <div className="absolute top-4 right-4">
+                           <span className="text-[8px] font-black uppercase px-2 py-1 rounded-md bg-orange-50 text-sanatani-orange border border-orange-200 shadow-sm flex items-center gap-1">
+                             <Flame size={10}/> Scholar
+                           </span>
+                         </div>
+                       )}
+
+                       {/* Centered Avatar with Seva Halo */}
+                       <div className={`w-20 h-20 rounded-full p-1 mt-6 mb-3 bg-gradient-to-tr ${halo.color} shadow-md`}>
+                         <div className="bg-white rounded-full h-full w-full overflow-hidden border-2 border-white flex items-center justify-center">
+                           {m.photoUrl ? (
+                             <img src={m.photoUrl} alt={m.name} className="w-full h-full object-cover" />
+                           ) : (
+                             <span className="text-2xl font-black text-gray-400">{getInitial(m.name)}</span>
+                           )}
+                         </div>
+                       </div>
+
+                       <h3 className="text-lg font-black text-gray-900 text-center leading-tight group-hover:text-sanatani-orange transition-colors truncate w-full px-2" title={m.name}>{m.name}</h3>
+                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1 text-center truncate w-full px-4">
+                         {m.designation || `${institutionLabel} ${safeTranslate('members', 'Member', 'সদস্য', 'सदस्य')}`}
+                       </p>
+                    </div>
+
+                    {/* Middle Data Grid */}
+                    <div className="p-4 grid grid-cols-2 gap-3 text-xs font-bold text-gray-600 bg-gray-50/50 flex-1">
+                      <div className="flex flex-col items-center justify-center bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm">
+                        <span className="text-[9px] text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1"><Phone size={10}/> {safeTranslate('phone_number', 'Phone', 'ফোন', 'फ़ोन')}</span>
+                        <span className="truncate w-full text-center">{m.phone || '-'}</span>
                       </div>
-
-                      <h3 className="text-lg font-black text-gray-900 truncate mb-1.5 group-hover:text-sanatani-orange transition-colors" title={m.name}>{m.name}</h3>
-                      <div className="space-y-2 mb-4">
-                        {m.phone && <p className="text-[11px] font-bold text-gray-500 flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-md border border-gray-100 w-fit"><Phone size={12} className="text-gray-400"/> {m.phone}</p>}
-                        {m.gotra && <p className="text-[11px] font-bold text-gray-500 flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-md border border-gray-100 w-fit"><ShieldCheck size={12} className="text-gray-400"/> {safeTranslate('gotra', 'Gotra', 'গোত্র', 'गोत्र')}: {m.gotra}</p>}
+                      <div className="flex flex-col items-center justify-center bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm">
+                        <span className="text-[9px] text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1"><ShieldCheck size={10}/> {safeTranslate('gotra', 'Gotra', 'গোত্র', 'गोत्र')}</span>
+                        <span className="truncate w-full text-center">{m.gotra || '-'}</span>
                       </div>
                     </div>
 
-                    <div className="pt-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50 -mx-6 -mb-6 px-6 py-4 group-hover:bg-orange-50/30 transition-colors">
+                    {/* Footer Metrics */}
+                    <div className="px-5 py-4 border-t border-gray-100 flex justify-between items-center bg-white rounded-b-3xl">
                       <div className="min-w-0">
                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 truncate">Lifetime {safeTranslate('funds', 'Funds', 'তহবিল', 'निधि')}</p>
-                        <p className="text-xl font-black text-green-600 tracking-tight truncate">{curSymbol}{(m.totalDonated || 0).toLocaleString()}</p>
+                        <p className="text-base font-black text-green-600 tracking-tight truncate">{curSymbol}{(m.totalDonated || 0).toLocaleString()}</p>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 shadow-sm shrink-0" title="Event Attendance Count">
-                        <Activity size={12}/> {m.attendanceCount || 0}
+                      <div className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-100 shadow-sm shrink-0" title="Seva Score">
+                        {halo.icon} {liveScore} Score
                       </div>
                     </div>
                   </div>
@@ -920,7 +971,10 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                             {m.photoUrl ? <img src={m.photoUrl} alt="Avatar" className="w-full h-full object-cover"/> : (m.name ? m.name.charAt(0).toUpperCase() : 'ॐ')}
                           </div>
                           <div>
-                            <p className="text-sm font-black text-gray-900 group-hover:text-sanatani-orange transition-colors">{m.name}</p>
+                            <p className="text-sm font-black text-gray-900 group-hover:text-sanatani-orange transition-colors flex items-center gap-1.5">
+                               {m.name}
+                               {m.phone && globalPurohitsMap[encodeIdentity(m.phone)] && <Flame size={12} className="text-sanatani-orange" title="Verified Scholar"/>}
+                            </p>
                             <p className="text-[9px] text-gray-400 font-mono tracking-widest mt-0.5">ID: {m.id.substring(0,8)}</p>
                           </div>
                         </div>
@@ -1010,7 +1064,14 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                  </div>
 
                  <div className="pb-4 pt-2 sm:pt-4 text-center sm:text-left flex-1 min-w-0 z-10">
-                   <h2 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight mb-2 whitespace-normal break-words">{activeMember.name || 'Unnamed Profile'}</h2>
+                   <h2 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight mb-2 whitespace-normal break-words flex items-center justify-center sm:justify-start gap-2">
+                     {activeMember.name || 'Unnamed Profile'}
+                     {activeMember.phone && globalPurohitsMap[encodeIdentity(activeMember.phone)] && (
+                       <span className="bg-orange-50 text-sanatani-orange border border-orange-200 px-2 py-0.5 rounded text-[10px] uppercase tracking-widest flex items-center gap-1 shadow-sm mt-1 sm:mt-0">
+                         <Flame size={12}/> Scholar
+                       </span>
+                     )}
+                   </h2>
                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                      <span className="text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest bg-gray-100 text-gray-700 border border-gray-200">
                         {activeMember.designation ? activeMember.designation : safeTranslate('members', 'Member', 'সদস্য', 'सदस्य')}
@@ -1109,6 +1170,18 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                         <Lock size={16} className="text-gray-300 shrink-0 ml-2" title="Contact Admin to update secure login identity."/>
                       </div>
 
+                      {/* ✨ ADDED FATHER AND MOTHER NAMES TO IDENTITY TAB */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 bg-white">
+                        <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
+                          <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('father_name', 'Father Name', 'পিতার নাম', 'पिता का नाम')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate">{activeMember.fatherName || safeTranslate('not_provided', 'Not Provided', 'দেওয়া হয়নি', 'उपलब्ध नहीं है')}</p></div>
+                          {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('fatherName', safeTranslate('father_name', 'Father Name', 'পিতার নাম', 'पिता का नाम'))} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
+                        </div>
+                        <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
+                          <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('mother_name', 'Mother Name', 'মাতার নাম', 'माता का नाम')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate">{activeMember.motherName || safeTranslate('not_provided', 'Not Provided', 'দেওয়া হয়নি', 'उपलब्ध नहीं है')}</p></div>
+                          {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('motherName', safeTranslate('mother_name', 'Mother Name', 'মাতার নাম', 'माता का नाम'))} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
+                        </div>
+                      </div>
+
                       <div className="p-4 sm:p-5 flex justify-between items-center group hover:bg-gray-50 transition-colors min-w-0">
                         <div className="w-full overflow-hidden min-w-0"><p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{safeTranslate('nid', 'Govt ID / NID', 'জাতীয় পরিচয়পত্র', 'राष्ट्रीय पहचान पत्र')}</p><p className="text-sm font-black text-gray-900 flex items-center gap-2 truncate"><CreditCard size={14} className="text-gray-400 shrink-0"/> {activeMember.nid || safeTranslate('not_provided', 'Not Provided', 'দেওয়া হয়নি', 'उपलब्ध नहीं है')}</p></div>
                         {(isAdmin || session.role === 'MANAGER' || session.uid === activeMember.id) && <button onClick={() => handleEditField('nid', safeTranslate('nid', 'Govt ID / NID', 'জাতীয় পরিচয়পত্র', 'राष्ट्रीय पहचान पत्र'))} className="text-blue-600 bg-blue-50 p-2.5 rounded-xl shrink-0 ml-2 hover:bg-blue-100 transition-colors border border-transparent hover:border-blue-200"><Edit size={14}/></button>}
@@ -1176,7 +1249,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                   <div className="bg-white border border-green-200 rounded-3xl p-6 flex flex-col sm:flex-row justify-between items-center gap-6 shadow-sm relative overflow-hidden">
                      <div className="absolute top-0 right-0 -mt-6 -mr-6 opacity-5 pointer-events-none"><Banknote size={120} className="text-green-600"/></div>
                      <div className="text-center sm:text-left relative z-10">
-                       <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-1.5 flex items-center justify-center sm:justify-start gap-1.5"><Banknote size={14}/> {safeTranslate('lifetime_donated', 'Lifetime Donated', 'মোট অনুদান', 'कुल दान')}</p>
+                       <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-1.5 flex items-center justify-center sm:justify-start gap-1.5"><Banknote size={14}/> Lifetime {safeTranslate('funds', 'Donated', 'মোট অনুদান', 'कुल दान')}</p>
                        <p className="text-4xl font-black text-green-600 tracking-tight">{curSymbol}{(activeMember.totalDonated || 0).toLocaleString()}</p>
                      </div>
                      {(session.role === 'ADMIN' || session.role === 'MANAGER') && (
@@ -1296,7 +1369,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                                      pushToDataLayer('download_receipt', { transaction_id: tr.id, transaction_type: type, value: Math.abs(tr.amount) });
                                      try {
                                        import('../utils/pdfGenerator').then(({ generateReceiptPdf }) => {
-                                          generateReceiptPdf(activeSession.communityName, tr, type);
+                                          if (generateReceiptPdf) generateReceiptPdf(session.communityName, tr, type);
                                        });
                                      } catch (err) { showToast(safeTranslate('error', 'Error', 'ত্রুটি', 'त्रुटि') + ": " + err.message, "error"); }
                                   }} className="text-gray-500 hover:text-sanatani-orange hover:bg-orange-50 p-2.5 rounded-xl border border-transparent hover:border-orange-200 transition-all shadow-sm" title={safeTranslate('download_receipt', 'Download Receipt', 'রসিদ ডাউনলোড করুন', 'रसीद डाउनलोड करें')}>
@@ -1357,7 +1430,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                     </div>
 
                     <div className="flex-1 text-center sm:text-left relative z-10">
-                      <h4 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('global_purohit_registry', 'Global Purohit Registry', 'গ্লোবাল পুরোহিত রেজিস্ট্রি', 'ग्लोबल पुरोहित निर्देशिका')}</h4>
+                      <h4 className="text-lg font-black text-gray-900 mb-1">Global Purohit Registry</h4>
                       <p className="text-xs font-bold text-gray-600 mb-4 max-w-sm leading-relaxed">
                         Verify if this devotee is a registered Acharya, Pandit, or Vedic Scholar on the global network.
                       </p>
@@ -1401,7 +1474,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
 
                         <p className="text-[10px] font-bold text-red-500 mb-6 bg-red-50 p-3 rounded-xl border border-red-100 text-left flex items-start gap-2 leading-relaxed">
                           <AlertTriangle size={16} className="shrink-0 mt-0.5"/> 
-                          {safeTranslate('qr_warning', 'WARNING: This QR code contains your secure PIN. Do not show this to volunteers at the gate. Use the "Gate Pass" tab instead.', 'সতর্কতা: এই QR কোডে আপনার পিন রয়েছে। এটি গেটে স্বেচ্ছাসেবকদের দেখাবেন না।', 'चेतावनी: इस QR कोड में आपका पिन है। इसे गेट पर न दिखाएं।')}
+                          {safeTranslate('qr_warning', 'WARNING: This QR code contains the secure PIN. Do not show this to volunteers at the gate. Use the "Gate Pass" tab instead.', 'সতর্কতা: এই QR কোডে আপনার পিন রয়েছে। এটি গেটে স্বেচ্ছাসেবকদের দেখাবেন না।', 'चेतावनी: इस QR कोड में आपका पिन है। इसे गेट पर न दिखाएं।')}
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-3 w-full">
@@ -1621,9 +1694,21 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                      </div>
                    </div>
 
+                   {/* ✨ NEW FATHER & MOTHER NAME FIELDS IN OPTIONAL SECTION */}
                    <div className="sm:col-span-2 flex items-center gap-3 border-b border-gray-100 pb-2 mt-2">
                       <MapPin size={16} className="text-gray-400" />
                       <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{safeTranslate('ext_details', 'Extended Details (Optional)', 'অতিরিক্ত তথ্য (ঐচ্ছিক)', 'विस्तृत जानकारी (वैकल्पिक)')}</span>
+                   </div>
+
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2">
+                     <div>
+                       <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('father_name', 'Father Name', 'পিতার নাম', 'पिता का नाम')}</label>
+                       <input type="text" value={formData.fatherName} onChange={e=>setFormData({...formData, fatherName: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="Father's Full Name" />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('mother_name', 'Mother Name', 'মাতার নাম', 'माता का नाम')}</label>
+                       <input type="text" value={formData.motherName} onChange={e=>setFormData({...formData, motherName: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="Mother's Full Name" />
+                     </div>
                    </div>
 
                    <div>
@@ -1640,7 +1725,7 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
                    </div>
                    <div className="sm:col-span-2">
                      <label className="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">{safeTranslate('cultural_desig', 'Designation', 'পদবী', 'पदनाम')}</label>
-                     <input type="text" value={formData.designation} onChange={e=>setFormData({...formData, designation: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="e.g. Chief Pujari, Cashier, Advisor..." />
+                     <input type="text" value={formData.designation} onChange={e=>setFormData({...formData, designation: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-sanatani-orange focus:ring-4 focus:ring-orange-50 outline-none transition-all shadow-sm" placeholder="e.g. Chief Pujari, Cashier, Assistant Sompodok..." />
                    </div>
 
                    {isAdmin && (
@@ -1667,11 +1752,6 @@ export default function DevoteeGrid({ session, isOnline = navigator.onLine }) {
           </div>
         </div>
       , document.body)}
-
-      {/* 🏛️ ENTERPRISE FOOTER CREDIT */}
-      <div className="pt-12 pb-6 text-center opacity-70 border-t border-gray-200 mt-auto text-xs font-bold text-gray-500 shrink-0">
-        Made with <Heart size={12} className="text-red-500 fill-current inline"/> by <span className="font-black text-sanatani-orange">TrackIQ Academy</span> • Universal Directory & CRM
-      </div>
 
     </div>
   );
