@@ -1,2 +1,2 @@
-# Sanatanibandhan-Web-App
-Comming soon
+# Sanatani-Bandhan-Web-app
+Sanatani Bandhan Web app
