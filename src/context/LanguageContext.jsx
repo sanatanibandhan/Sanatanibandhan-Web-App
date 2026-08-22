@@ -137,6 +137,25 @@ export const translations = {
     active_poll: "Active Poll",
     quick_guide_title: "Command Center Guide",
 
+    // ✨ DASHBOARD HOME & GREETINGS
+    suprabhat: "Suprabhat",
+    namaskar: "Namaskar",
+    shubha_sandhya: "Shubha Sandhya",
+    welcome_to: "Welcome to the",
+    command_center_desc: "command center. Here is what is happening across your network today.",
+    setup_progress: "Setup Progress",
+    global_ledger_locked: "Global Ledger Locked",
+    global_ledger_desc: "You are in Personal Mode. Community figures are hidden for security.",
+    request_pending: "Request Pending...",
+    request_global_access: "Request Global Access",
+    command_shortcuts: "Command Shortcuts",
+    btn_add_member: "Add Member",
+    schedule_event: "New Event",
+    btn_send_alert: "Send Alert",
+    my_lifetime: "My Lifetime",
+    universal_marketplace: "Universal Marketplace",
+    pending_ledger_access: "Pending Ledger Access Requests",
+
     // ✨ ENTERPRISE DIRECTORY, PROFILE & HUB KEYS 
     req_identity_data: "Required Identity Data",
     ext_details: "Extended Details (Optional)",
@@ -367,26 +386,6 @@ export const translations = {
     cancel: "Cancel",
     book_now: "Book Now",
 
-    // ✨ PROFILE & NOTIFICATIONS ENGINE KEYS
-    updates: "Updates",
-    activity_center: "Activity Center",
-    pending: "Pending",
-    no_activities: "No activities found.",
-    req_approval: "requests approval:",
-    btn_approve: "APPROVE",
-    btn_reject: "REJECT",
-    performed_action: "performed action:",
-    operating_currency: "Operating Currency",
-    tap_to_edit: "Tap to Edit",
-    full_name: "Full Name",
-    phone_number: "Phone Number",
-    email: "Email",
-    personal_transactions: "Personal Transactions",
-    security_controls: "Security Controls",
-    btn_save: "Save",
-    events_attended: "Events Attended",
-    lifetime_donated: "Lifetime Donated",
-
     // UPGRADE REASONS
     upgrade_title: "Ready to Scale?",
     upgrade_r1: "Unlimited Member Profiles",
@@ -481,6 +480,7 @@ export const translations = {
     community_feed: "দর্শন ও ফিড",
     my_ritual_diary: "আমার রিচুয়াল ডায়েরি",
 
+    // ⬇️ LOGIN & REGISTRATION
     login_secure: "নিরাপদ লগইন",
     login_create: "ওয়ার্কস্পেস তৈরি করুন",
     login_admin: "অ্যাডমিন",
@@ -567,6 +567,25 @@ export const translations = {
     free_feat_2: "সাধারণ তহবিল ট্র্যাকিং",
     free_feat_3: "সর্বোচ্চ {X} টি সক্রিয় পোল",
     free_feat_4: "মাসে {X} টি পিডিএফ রিপোর্ট",
+
+    // ✨ DASHBOARD HOME & GREETINGS
+    suprabhat: "সুপ্রভাত",
+    namaskar: "নমস্কার",
+    shubha_sandhya: "শুভ সন্ধ্যা",
+    welcome_to: "স্বাগতম",
+    command_center_desc: "কমান্ড সেন্টারে। আজ আপনার নেটওয়ার্কে যা ঘটছে তা এখানে রয়েছে।",
+    setup_progress: "সেটআপের অগ্রগতি",
+    global_ledger_locked: "গ্লোবাল লেজার লকড",
+    global_ledger_desc: "আপনি ব্যক্তিগত মোডে আছেন। নিরাপত্তার জন্য সম্প্রদায়ের পরিসংখ্যান লুকানো হয়েছে।",
+    request_pending: "অনুরোধ অপেক্ষমান...",
+    request_global_access: "গ্লোবাল অ্যাক্সেস অনুরোধ করুন",
+    command_shortcuts: "কমান্ড শর্টকাট",
+    btn_add_member: "সদস্য যোগ করুন",
+    schedule_event: "নতুন ইভেন্ট",
+    btn_send_alert: "অ্যালার্ট পাঠান",
+    my_lifetime: "আমার আজীবন",
+    universal_marketplace: "গ্লোবাল মার্কেটপ্লেস",
+    pending_ledger_access: "অপেক্ষমান লেজার অ্যাক্সেস অনুরোধ",
 
     signed_in_as: "লগইন করেছেন",
     my_profile: "আমার প্রোফাইল",
@@ -807,26 +826,7 @@ export const translations = {
     cancel: "বাতিল",
     book_now: "বুক করুন",
 
-    // ✨ PROFILE & NOTIFICATIONS ENGINE KEYS (BENGALI)
-    updates: "আপডেট",
-    activity_center: "অ্যাক্টিভিটি সেন্টার",
-    pending: "অপেক্ষমান",
-    no_activities: "কোনো নতুন অ্যাক্টিভিটি নেই।",
-    req_approval: "অনুমোদন চেয়েছেন:",
-    btn_approve: "অনুমোদন করুন",
-    btn_reject: "বাতিল করুন",
-    performed_action: "কাজটি করেছেন:",
-    operating_currency: "অপারেটিং মুদ্রা",
-    tap_to_edit: "এডিট করতে ট্যাপ করুন",
-    full_name: "পুরো নাম",
-    phone_number: "ফোন নম্বর",
-    email: "ইমেইল",
-    personal_transactions: "ব্যক্তিগত লেনদেন",
-    security_controls: "নিরাপত্তা কন্ট্রোল",
-    btn_save: "সেভ করুন",
-    events_attended: "ইভেন্টে অংশগ্রহণ করেছেন",
-    lifetime_donated: "মোট অনুদান",
-
+    // UPGRADE REASONS
     upgrade_title: "স্কেল করতে প্রস্তুত?",
     upgrade_r1: "আনলিমিটেড সদস্য প্রোফাইল",
     upgrade_r2: "আনলিমিটেড পিডিএফ রিপোর্ট",
@@ -918,6 +918,7 @@ export const translations = {
     community_feed: "दर्शन और फीड",
     my_ritual_diary: "मेरी अनुष्ठान डायरी",
 
+    // ⬇️ LOGIN & REGISTRATION
     login_secure: "सुरक्षित लॉगिन",
     login_create: "कार्यक्षेत्र बनाएँ",
     login_admin: "व्यवस्थापक",
@@ -1004,6 +1005,25 @@ export const translations = {
     free_feat_2: "सामान्य निधि ट्रैकिंग",
     free_feat_3: "अधिकतम {X} सक्रिय पोल",
     free_feat_4: "प्रति माह {X} PDF रिपोर्ट",
+
+    // ✨ DASHBOARD HOME & GREETINGS
+    suprabhat: "सुप्रभात",
+    namaskar: "नमस्कार",
+    shubha_sandhya: "शुभ संध्या",
+    welcome_to: "में आपका स्वागत है",
+    command_center_desc: "कमांड सेंटर। आज आपके नेटवर्क में क्या हो रहा है, यह यहां है।",
+    setup_progress: "सेटअप प्रगति",
+    global_ledger_locked: "ग्लोबल लेजर लॉक्ड",
+    global_ledger_desc: "आप व्यक्तिगत मोड में हैं। सुरक्षा के लिए सामुदायिक आंकड़े छिपाए गए हैं।",
+    request_pending: "अनुरोध लंबित...",
+    request_global_access: "ग्लोबल एक्सेस का अनुरोध करें",
+    command_shortcuts: "कमांड शॉर्टकट्स",
+    btn_add_member: "सदस्य जोड़ें",
+    schedule_event: "नया इवेंट",
+    btn_send_alert: "अलर्ट भेजें",
+    my_lifetime: "मेरा आजीवन",
+    universal_marketplace: "यूनिवर्सल मार्केटप्लेस",
+    pending_ledger_access: "लंबित खाता पहुंच अनुरोध",
 
     signed_in_as: "लॉग इन किया है",
     my_profile: "मेरी प्रोफ़ाइल",
