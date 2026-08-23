@@ -8,7 +8,8 @@ import {
   Banknote, TrendingDown, TrendingUp, Search, Filter, 
   Download, Plus, Camera, Loader2, X, AlertTriangle, 
   CheckCircle2, WifiOff, FileDigit, CalendarDays, Receipt, 
-  FileText, ZoomIn, Package, Box, Flame, Sparkles, User
+  FileText, ZoomIn, Package, Box, Flame, Sparkles, User,
+  ShieldCheck, FileDown, UploadCloud, Heart // ✨ CRITICAL FIX: All missing imports added
 } from 'lucide-react';
 import { generateTreasuryReportPdf, generateReceiptPdf } from '../utils/pdfGenerator';
 import { usePlanGate } from '../hooks/usePlanGate';
@@ -59,7 +60,7 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
     return fallbackEn;
   };
 
-  // ✨ DYNAMIC TERMINOLOGY (Fixes the ReferenceError crash)
+  // ✨ DYNAMIC TERMINOLOGY
   const incomeTabLabel = useMemo(() => safeTranslate('tab_chanda', 'Income / Chanda', 'তহবিল সংগ্রহ', 'चंदा/आय'), [language, t]);
   const expenseTabLabel = useMemo(() => safeTranslate('tab_expenses', 'Expenses', 'ব্যয়', 'खर्च'), [language, t]);
   const assetTabLabel = useMemo(() => safeTranslate('nav_assets', 'Assets & Records', 'সম্পদ ও রেকর্ড', 'संपत्ति और रिकॉर्ड'), [language, t]);
@@ -118,7 +119,7 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
       const img = document.createElement('img');
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 600; // Good balance for reading text on memos
+        const MAX_SIZE = 600; 
         let width = img.width;
         let height = img.height;
         if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
