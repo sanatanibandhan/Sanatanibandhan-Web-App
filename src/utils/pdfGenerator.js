@@ -46,15 +46,18 @@ const generateReceiptNumber = (firebaseId) => {
   return Math.abs(hash).toString().substring(0, 8).padStart(8, '0');
 };
 
-// ✨ DYNAMIC LOGO RESOLUTION LOGIC
-// Checks if a custom workspace logo is saved in localStorage. If not, falls back to the CRM default.
+// ✨ STRICT DYNAMIC LOGO RESOLUTION LOGIC
+// Extracts the exact community ID from the active session to guarantee the correct logo is fetched.
 const getWorkspaceLogo = () => {
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('sb_logo_')) {
-        const customLogo = localStorage.getItem(key);
-        if (customLogo) return customLogo;
+    const sessionStr = localStorage.getItem('sanatani_web_session');
+    if (sessionStr) {
+      const session = JSON.parse(sessionStr);
+      if (session && session.communityId) {
+        const customLogo = localStorage.getItem(`sb_logo_${session.communityId}`);
+        if (customLogo && (customLogo.startsWith('data:image') || customLogo.startsWith('http') || customLogo.startsWith('/'))) {
+          return customLogo;
+        }
       }
     }
   } catch (e) {
@@ -171,9 +174,12 @@ const addSanataniHeader = (doc, orgName, reportTitle, location = 'Headquarters',
   const pageWidth = doc.internal.pageSize.width;
   const logoSrc = getWorkspaceLogo();
 
-  // Logo Attempt with Fallback Ring
+  // ✨ FIXED: Dynamic Format Parser to prevent JPEG/WebP corruption
   try {
-    doc.addImage(logoSrc, 'PNG', 14, 12, 14, 14);
+    let imgType = 'PNG';
+    if (logoSrc.startsWith('data:image/jpeg')) imgType = 'JPEG';
+    else if (logoSrc.startsWith('data:image/webp')) imgType = 'WEBP';
+    doc.addImage(logoSrc, imgType, 14, 12, 14, 14);
   } catch (error) {
     doc.setFillColor(...SAFFRON);
     doc.circle(21, 19, 7, 'F');
@@ -214,7 +220,7 @@ const addSanataniHeader = (doc, orgName, reportTitle, location = 'Headquarters',
   doc.text(`Generated: ${dateStr}`, pageWidth - 14, 24, { align: "right" });
 
   // Title Ribbon
-  const ribbonColor = reportTitle.includes('EXPENSE') || reportTitle.includes('AUDIT') ? RED : reportTitle.includes('RECEIPT') || reportTitle.includes('DONATION') ? GREEN : SAFFRON;
+  const ribbonColor = reportTitle.includes('EXPENSE') || reportTitle.includes('AUDIT') || reportTitle.includes('SECURITY') ? RED : reportTitle.includes('RECEIPT') || reportTitle.includes('DONATION') ? GREEN : SAFFRON;
   doc.setFillColor(...ribbonColor);
   doc.rect(14, 30, pageWidth - 28, 9, 'F');
   doc.setTextColor(255, 255, 255);
@@ -713,37 +719,76 @@ export const generatePollReportPdf = async (communityName, poll, members, includ
 };
 
 // ==========================================
-// 8. SECURITY AUDIT REPORT
+// 8. SECURITY AUDIT REPORT (BULK)
 // ==========================================
-export const generateSecurityAuditPdf = async (communityName, logs) => {
+export const generateBulkAuditPdf = async (communityName, logs) => {
   const doc = new jsPDF();
   const docHash = generateDocumentHash();
-  addSanataniHeader(doc, communityName, "SECURITY & ACTIVITY AUDIT");
+  
+  addSanataniHeader(doc, communityName, "SECURITY AUDIT LOG REPORT");
 
-  const tableRows = logs.map(log => [
+  const tableData = logs.map(log => [
     new Date(log.timestamp).toLocaleString(),
-    log.managerName || "System",
-    log.actionType || "",
-    log.description || ""
+    log.actionType.replace(/_/g, ' '),
+    log.managerName || 'System',
+    log.description
   ]);
 
   doc.autoTable({
-    startY: 48,
-    head: [["Date & Time", "Authorized User", "Action Triggered", "System Description"]],
-    body: tableRows,
-    theme: 'grid',
-    headStyles: { fillColor: RED, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-    columnStyles: { 2: { fontStyle: 'bold' } },
-    styles: { fontSize: 8, cellPadding: 3 }
+    startY: 44,
+    head: [["Date & Time", "Action", "Authorized By", "Details"]],
+    body: tableData,
+    theme: 'striped',
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: SAFFRON, textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 3: { cellWidth: 80 } }
   });
 
   addSanataniFooter(doc, docHash);
-  const cleanComm = communityName ? communityName.replace(/[^a-zA-Z0-9]/g, '_') : "Workspace";
-  await smartPdfExport(doc, `${cleanComm}-Security_Audit-${getFormattedFileNameDate()}.pdf`);
+  await smartPdfExport(doc, `Security_Audit_Report_${getFormattedFileNameDate()}.pdf`);
 };
 
 // ==========================================
-// 9. ACTIVITY & FINANCIAL REPORT (Devotee Grid)
+// 9. SECURITY AUDIT VOUCHER (SINGLE)
+// ==========================================
+export const generateSingleAuditVoucherPdf = async (communityName, log) => {
+  const doc = new jsPDF({ format: 'a5' });
+  const docHash = generateDocumentHash();
+  
+  addSanataniHeader(doc, communityName, "OFFICIAL AUDIT VOUCHER");
+
+  doc.setTextColor(...DARK_SLATE);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Log ID: ${log.id}`, 14, 48);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Timestamp: ${new Date(log.timestamp).toLocaleString()}`, 14, 54);
+
+  doc.setDrawColor(230, 230, 230);
+  doc.line(14, 60, doc.internal.pageSize.width - 14, 60);
+
+  doc.setFontSize(12);
+  doc.setTextColor(...SAFFRON);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Action: ${log.actionType.replace(/_/g, ' ')}`, 14, 70);
+
+  doc.setTextColor(...DARK_SLATE);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  const splitDesc = doc.splitTextToSize(log.description, doc.internal.pageSize.width - 28);
+  doc.text(splitDesc, 14, 80);
+
+  const finalY = 80 + (splitDesc.length * 5);
+  
+  doc.setFont("helvetica", "bold");
+  doc.text(`Authorized By: ${log.managerName || 'System'}`, 14, finalY + 10);
+
+  addSanataniFooter(doc, docHash);
+  await smartPdfExport(doc, `Audit_Voucher_${log.id}.pdf`);
+};
+
+// ==========================================
+// 10. ACTIVITY & FINANCIAL REPORT (Devotee Grid)
 // ==========================================
 export const generateUserActivitiesPDF = async (communityName, member, userTransactions, filterType = 'ALL', dateRange = { start: '', end: '' }) => {
   const doc = new jsPDF();
@@ -792,7 +837,7 @@ export const generateUserActivitiesPDF = async (communityName, member, userTrans
 };
 
 // ==========================================
-// 10. ✨ BULK EVENT TICKETS PDF (NEW FIX)
+// 11. ✨ BULK EVENT TICKETS PDF
 // ==========================================
 export const generateBulkEventTicketsPDF = async (event, invitedMembers, communityName) => {
   const doc = new jsPDF({ format: 'a4' });
