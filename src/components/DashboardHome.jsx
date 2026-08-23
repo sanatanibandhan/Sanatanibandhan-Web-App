@@ -4,8 +4,8 @@ import { ref, onValue, push, update, serverTimestamp } from 'firebase/database';
 import { db } from '../firebase';
 import { useLanguage } from '../context/LanguageContext';
 import { pushToDataLayer } from '../utils/gtm'; 
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+// ✨ ENTERPRISE PDF ENGINE INTEGRATION
+import { generateBulkAuditPdf, generateSingleAuditVoucherPdf } from '../utils/pdfGenerator';
 import { 
   Users, Banknote, CalendarDays, Activity, TrendingUp,
   ShieldCheck, Crown, Megaphone, Loader2, UserPlus, 
@@ -13,7 +13,7 @@ import {
   CheckCircle, CheckCircle2, XCircle, Filter, Download, HelpCircle, 
   FileDown, FileText, Heart, Shield, Sparkles, PlusCircle, 
   Wallet, Flame, HeartHandshake, BellRing, UserCheck, ShieldAlert,
-  ArrowRight
+  ArrowRight, Sun
 } from 'lucide-react';
 import { usePlanGate } from '../hooks/usePlanGate';
 
@@ -41,17 +41,17 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
     if (isPurohitMode) return safeTranslate('purohit_desk', 'Purohit Desk', 'পুরোহিত ডেস্ক', 'पुरोहित डेस्क');
     const rawType = String(orgType).toUpperCase();
     switch (rawType) {
-      case 'GOSHALA': return safeTranslate('workspace_goshala', 'Goshala', 'গোশালা', 'गौशाला');
-      case 'SANGHA': return safeTranslate('workspace_sangha', 'Sangha', 'সংঘ', 'संघ');
-      case 'ASHRAM': return safeTranslate('workspace_ashram', 'Ashram', 'আশ্রম', 'आश्रम');
-      case 'GURUKUL': return safeTranslate('workspace_gurukul', 'Gurukul', 'গুরকুল', 'गुरुकुल');
-      case 'SATSANG': return safeTranslate('workspace_satsang', 'Satsang', 'সৎসঙ্গ', 'सत्संग');
-      case 'YOGA': return safeTranslate('workspace_yoga', 'Yoga Center', 'যোগ কেন্দ্র', 'योग केंद्र');
-      case 'TRUST': return safeTranslate('workspace_trust', 'Trust', 'ট্রাস্ট', 'ट्रस्ट');
-      case 'TIRTH': return safeTranslate('workspace_tirth', 'Tirth / Dham', 'তীর্থ', 'तीर्थ');
-      case 'SAMAJ': return safeTranslate('workspace_samaj', 'Samaj', 'সমাজ', 'समाज');
+      case 'GOSHALA': return safeTranslate('workspace_goshala', 'Goshala');
+      case 'SANGHA': return safeTranslate('workspace_sangha', 'Sangha');
+      case 'ASHRAM': return safeTranslate('workspace_ashram', 'Ashram');
+      case 'GURUKUL': return safeTranslate('workspace_gurukul', 'Gurukul');
+      case 'SATSANG': return safeTranslate('workspace_satsang', 'Satsang');
+      case 'YOGA': return safeTranslate('workspace_yoga', 'Yoga Center');
+      case 'TRUST': return safeTranslate('workspace_trust', 'Trust');
+      case 'TIRTH': return safeTranslate('workspace_tirth', 'Tirth / Dham');
+      case 'SAMAJ': return safeTranslate('workspace_samaj', 'Samaj');
       case 'MANDIR':
-      default: return safeTranslate('workspace_mandir', 'Mandir', 'মন্দির', 'मंदिर');
+      default: return safeTranslate('workspace_mandir', 'Mandir');
     }
   }, [orgType, language, isPurohitMode]);
 
@@ -89,8 +89,8 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
 
   const [myAccessStatus, setMyAccessStatus] = useState('RESTRICTED'); 
   const [auditFilters, setAuditFilters] = useState({ actionType: 'ALL', startDate: '', endDate: '' });
-  
-  // ✨ ENTERPRISE TOAST ENGINE
+
+  // ✨ ENTERPRISE TOAST & MODAL ENGINE
   const [toast, setToast] = useState(null);
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -98,6 +98,14 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
   };
 
   const curSymbol = session?.currency?.symbol || '৳';
+
+  // ✨ DYNAMIC DATE & PANJIKA FORMATTER
+  const currentPanjikaDate = useMemo(() => {
+    const today = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const locale = language === 'bn' ? 'bn-BD' : language === 'hi' ? 'hi-IN' : 'en-US';
+    return today.toLocaleDateString(locale, options);
+  }, [language]);
 
   // Greeting Logic based on Time
   const greeting = useMemo(() => {
@@ -113,7 +121,6 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
     }
   }, [quotesList]);
 
-  // 🚀 FIXED: Removed window.alert to strictly enforce "ZERO NATIVE POPUPS" rule
   const executeSafeUpdate = async (updates, successMsg = null) => {
     if (!isOnline) {
       update(ref(db), updates).catch(e => console.error("Offline Sync Queued:", e));
@@ -341,31 +348,17 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
     return match;
   }); 
 
-  // ✨ BULK PDF EXPORT FOR AUDIT LOG
-  const exportBulkAuditPDF = () => {
-    pushToDataLayer('export_data', { export_type: 'PDF', data_category: 'AUDIT_LOG' });
-    const doc = new jsPDF();
-    doc.text(`Security Audit Log - ${session.communityName || "Workspace"}`, 14, 15);
-
-    const tableData = filteredLogs.map(log => [
-      new Date(log.timestamp).toLocaleString(),
-      log.actionType.replace(/_/g, ' '),
-      log.managerName || 'System',
-      log.description
-    ]);
-
-    doc.autoTable({
-      startY: 20,
-      head: [["Date & Time", "Action", "Authorized By", "Details"]],
-      body: tableData,
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [230, 81, 0] }
-    });
-
-    doc.save(`Audit_Report_${Date.now()}.pdf`);
+  // ✨ INTEGRATED: Enterprise PDF Generator Calls
+  const exportBulkAuditPDF = async () => {
+    try {
+      pushToDataLayer('export_data', { export_type: 'PDF', data_category: 'AUDIT_LOG' });
+      await generateBulkAuditPdf(session.communityName, filteredLogs);
+      showToast(safeTranslate('success', 'Success') + ": Audit Report Downloaded");
+    } catch (e) {
+      showToast(safeTranslate('error', 'Error') + ": " + e.message, "error");
+    }
   };
 
-  // ✨ BULK CSV EXPORT FOR AUDIT LOG
   const exportBulkAuditCSV = () => {
     pushToDataLayer('export_data', { export_type: 'CSV', data_category: 'AUDIT_LOG' });
     let csvContent = "data:text/csv;charset=utf-8,Date,Action,Authorized By,Details\n";
@@ -384,43 +377,20 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
     document.body.removeChild(link);
   };
 
-  const exportSingleAuditVoucher = (log) => {
-    pushToDataLayer('file_download', { file_extension: 'PDF', file_name: 'Single_Audit_Voucher' });
-    const doc = new jsPDF({ format: 'a5' });
-    doc.setFillColor(25, 118, 210);
-    doc.rect(0, 0, 148, 25, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text(session.communityName || "Sanatani Workspace", 74, 12, { align: "center" });
-    doc.setFontSize(10);
-    doc.text("OFFICIAL AUDIT VOUCHER", 74, 19, { align: "center" });
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(10);
-    doc.text(`Log ID: ${log.id}`, 15, 35);
-    doc.text(`Timestamp: ${new Date(log.timestamp).toLocaleString()}`, 15, 43);
-    doc.setDrawColor(220, 220, 220);
-    doc.line(15, 48, 133, 48);
-    doc.setFontSize(12);
-    doc.setTextColor(230, 81, 0);
-    doc.text(`Action: ${log.actionType}`, 15, 60);
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    const splitDesc = doc.splitTextToSize(log.description, 115);
-    doc.text(splitDesc, 15, 70);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Authorized By: ${log.managerName || 'System'}`, 15, 100);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text("Cryptographically generated via Sanatani Bandhan Security Engine.", 74, 140, { align: "center" });
-    doc.save(`Audit_Voucher_${log.id}.pdf`);
+  const exportSingleAuditVoucher = async (log) => {
+    try {
+      pushToDataLayer('file_download', { file_extension: 'PDF', file_name: 'Single_Audit_Voucher' });
+      await generateSingleAuditVoucherPdf(session.communityName, log);
+      showToast(safeTranslate('success', 'Success') + ": Voucher Downloaded");
+    } catch (e) {
+      showToast(safeTranslate('error', 'Error') + ": " + e.message, "error");
+    }
   };
 
   if (loading) return <div className="flex justify-center items-center h-[60vh] text-sanatani-orange"><Loader2 size={48} className="animate-spin" /></div>;
 
   return (
-    <div className="space-y-6 fade-in pb-12 relative w-full">
+    <div className="space-y-6 fade-in pb-12 relative w-full max-w-[1600px] mx-auto">
 
       {/* ✨ TOAST PORTAL */}
       {toast && createPortal(
@@ -445,7 +415,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
             <button onClick={() => setShowQuickGuide(false)} className="absolute top-5 right-5 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full transition-colors"><XCircle size={20}/></button>
             <h3 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2"><HelpCircle className="text-sanatani-orange"/> {safeTranslate('quick_guide_title', 'Command Center Guide', 'কমান্ড সেন্টার গাইড', 'कमांड सेंटर गाइड')}</h3>
             <div className="space-y-4 text-sm font-bold text-gray-600 leading-relaxed">
-              <p><strong>1. Interconnected Metrics:</strong> Tap any Quick Action shortcut (like Log Chanda or Schedule Event) to instantly jump to its specific management module.</p>
+              <p><strong>1. Interconnected Metrics:</strong> Tap any Quick Action shortcut or KPI card (like Total Devotees) to instantly jump to its specific management module.</p>
               <p><strong>2. Smart Widgets:</strong> The central dashboard pulls live data from your Panjika, Matrimonial, and Ritual modules to give you a bird's-eye view of your ecosystem.</p>
               <p><strong>3. Privacy Engine:</strong> To protect community funds, general devotees only see their personal contributions until global access is granted by an Admin.</p>
             </div>
@@ -453,48 +423,58 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
         </div>, document.body
       )}
 
-      {/* 🚀 WELCOME BANNER WITH SHLOKA ENGINE */}
-      <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden ring-1 ring-white/10">
+      {/* 🚀 THE MASTER PANJIKA & SHLOKA BANNER */}
+      <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden ring-1 ring-white/10 flex flex-col lg:flex-row justify-between gap-8 items-center lg:items-stretch">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 opacity-10 pointer-events-none">
-           <Sparkles size={200} className="text-sanatani-orange"/>
+           <Sparkles size={300} className="text-sanatani-orange"/>
         </div>
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border backdrop-blur-md shadow-sm ${isPurohitMode ? 'bg-red-500/20 text-red-300 border-red-500/20' : 'bg-white/10 text-orange-400 border-white/10'}`}>
-                {isPurohitMode ? safeTranslate('global_scholar', 'Global Scholar', 'গ্লোবাল স্কলার', 'ग्लोबल स्कॉलर') : `${institutionLabel} Workspace`}
-              </span>
-              <button onClick={() => {setShowQuickGuide(true); pushToDataLayer('open_quick_guide', { module: 'DashboardHome' });}} className="text-[10px] font-black uppercase tracking-widest bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full border border-blue-500/20 hover:bg-blue-500/40 transition-colors flex items-center gap-1 shadow-sm">
-                 <HelpCircle size={10}/> {safeTranslate('quick_guide', 'Guide', 'গাইড', 'गाइड')}
-              </button>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-2">
-              {greeting}, {session?.userName?.split(' ')[0]}! 🙏
-            </h1>
-            <p className="text-xs font-bold text-gray-400 max-w-lg leading-relaxed">
-              {safeTranslate('welcome_to', 'Welcome to the', 'স্বাগতম', 'में आपका स्वागत है')} <strong className="text-white">{session?.communityName}</strong> {safeTranslate('command_center_desc', 'command center. Here is what is happening across your network today.', 'কমান্ড সেন্টারে। আজ আপনার নেটওয়ার্কে যা ঘটছে তা এখানে রয়েছে।', 'कमांड सेंटर। आज आपके नेटवर्क में क्या हो रहा है, यह यहां है।')}
-            </p>
+        {/* Left: Greeting & Current Date */}
+        <div className="relative z-10 flex flex-col justify-center flex-1 w-full text-center lg:text-left">
+          <div className="flex items-center justify-center lg:justify-start gap-2 mb-4">
+            <span className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full border backdrop-blur-md shadow-sm ${isPurohitMode ? 'bg-red-500/20 text-red-300 border-red-500/20' : 'bg-white/10 text-orange-400 border-white/10'}`}>
+              {isPurohitMode ? safeTranslate('global_scholar', 'Global Scholar', 'গ্লোবাল স্কলার', 'ग्लोबल स्कॉलर') : `${institutionLabel} Workspace`}
+            </span>
+            <button onClick={() => {setShowQuickGuide(true); pushToDataLayer('open_quick_guide', { module: 'DashboardHome' });}} className="text-[10px] font-black uppercase tracking-widest bg-blue-500/20 text-blue-300 px-4 py-1.5 rounded-full border border-blue-500/20 hover:bg-blue-500/40 transition-colors flex items-center gap-1.5 shadow-sm">
+               <HelpCircle size={12}/> {safeTranslate('quick_guide', 'Guide', 'গাইড', 'गाइड')}
+            </button>
           </div>
+          
+          <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-2">
+            {greeting}, {session?.userName?.split(' ')[0]}! 🙏
+          </h1>
+          <p className="text-sm font-bold text-gray-400 max-w-lg leading-relaxed mx-auto lg:mx-0">
+            {safeTranslate('welcome_to', 'Welcome to the', 'স্বাগতম', 'में आपका स्वागत है')} <strong className="text-white">{session?.communityName}</strong> {safeTranslate('command_center_desc', 'command center. Here is what is happening across your network today.', 'কমান্ড সেন্টারে। আজ আপনার নেটওয়ার্কে যা ঘটছে তা এখানে রয়েছে।', 'कमांड सेंटर। आज आपके नेटवर्क में क्या हो रहा है, यह यहां है।')}
+          </p>
 
-          {/* Setup Progress Widget OR Shloka Quote */}
+          <div className="mt-6 flex items-center justify-center lg:justify-start gap-3 text-orange-200">
+             <Sun size={24} className="animate-spin-slow text-sanatani-orange" />
+             <div className="text-left">
+                <p className="text-sm font-black">{currentPanjikaDate}</p>
+                <p className="text-[9px] uppercase tracking-widest font-bold text-orange-400">{safeTranslate('today_panjika', 'Today in Panjika', 'আজকের পঞ্জিকা', 'आज का पंचांग')}</p>
+             </div>
+          </div>
+        </div>
+
+        {/* Right: Shloka Widget or Setup Progress */}
+        <div className="relative z-10 w-full lg:w-[450px] flex flex-col justify-center shrink-0">
           {setupProgress < 100 && isAdmin ? (
-            <div className="bg-white/10 backdrop-blur-md border border-white/10 p-4 rounded-2xl md:w-64 shrink-0 shadow-lg animate-in slide-in-from-right-4">
-              <div className="flex justify-between items-end mb-2">
+            <div className="bg-white/10 backdrop-blur-md border border-white/10 p-6 rounded-3xl shadow-xl w-full">
+              <div className="flex justify-between items-end mb-3">
                 <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{safeTranslate('setup_progress', 'Setup Progress', 'সেটআপের অগ্রগতি', 'सेटअप प्रगति')}</p>
-                <p className="text-sm font-black text-sanatani-orange">{setupProgress}%</p>
+                <p className="text-lg font-black text-sanatani-orange">{setupProgress}%</p>
               </div>
-              <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+              <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden shadow-inner">
                 <div className="bg-gradient-to-r from-orange-500 to-red-500 h-full rounded-full transition-all duration-1000" style={{ width: `${setupProgress}%` }}></div>
               </div>
             </div>
           ) : (
-            <div className="w-full md:w-1/2 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-5 relative group transition-all hover:bg-white/10 shadow-lg">
-               <Quote size={40} className="absolute top-3 left-3 text-white/5 group-hover:text-sanatani-orange/10 transition-colors" />
-               <div className="relative z-10 pl-4 border-l-2 border-sanatani-orange">
-                  <p className="text-sm sm:text-base font-black text-orange-400 font-devanagari mb-1 leading-snug">{dailyQuote.text}</p>
-                  <p className="text-[11px] sm:text-xs font-bold text-gray-300 italic mb-2">"{dailyQuote.meaning}"</p>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 flex items-center gap-1"><BookOpen size={10}/> {dailyQuote.source}</p>
+            <div className="bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 relative group transition-all hover:bg-white/10 shadow-2xl w-full">
+               <Quote size={48} className="absolute top-4 left-4 text-white/5 group-hover:text-sanatani-orange/20 transition-colors duration-500" />
+               <div className="relative z-10 pl-6 border-l-4 border-sanatani-orange">
+                  <p className="text-base sm:text-lg font-black text-orange-400 font-devanagari mb-2 leading-relaxed tracking-wide">{dailyQuote.text}</p>
+                  <p className="text-[11px] sm:text-xs font-bold text-gray-300 italic mb-4 leading-relaxed">"{dailyQuote.meaning}"</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 flex items-center gap-1.5"><BookOpen size={12}/> {dailyQuote.source}</p>
                </div>
             </div>
           )}
@@ -521,38 +501,54 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
         </div>
       )}
 
-      {/* 📊 KPI VITAL SIGNS GRID */}
+      {/* 📊 INTERCONNECTED KPI VITAL SIGNS MATRIX */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center cursor-default hover:border-sanatani-orange hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden">
-           <div className="absolute top-0 right-0 -mr-4 -mt-4 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={100}/></div>
-           <div className="h-14 w-14 mb-4 bg-gradient-to-br from-orange-50 to-orange-100 text-sanatani-orange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-orange-200 relative z-10"><Users size={26} /></div>
-           <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight relative z-10">{globalStats.devotees.toLocaleString()}</p>
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Total {safeTranslate(workspaceType === 'Goshala' ? 'gau_sevaks' : 'members', 'Members', 'সদস্য', 'सदस्य')}</p>
+        <div 
+          onClick={() => { if(hasGlobalAccess && setActiveTab) setActiveTab('directory'); }}
+          className={`bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-300 hover:-translate-y-1.5 group relative overflow-hidden ${hasGlobalAccess ? 'cursor-pointer hover:border-sanatani-orange hover:shadow-xl' : 'cursor-default'}`}
+        >
+           <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0"><ArrowRight size={16} className="text-orange-400"/></div>
+           <div className="absolute bottom-0 right-0 -mr-4 -mb-4 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={120}/></div>
+           <div className="h-16 w-16 mb-4 bg-gradient-to-br from-orange-50 to-orange-100 text-sanatani-orange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-orange-200 relative z-10"><Users size={28} /></div>
+           <p className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight relative z-10 mb-1">{globalStats.devotees.toLocaleString()}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest relative z-10">Total {safeTranslate(workspaceType === 'Goshala' ? 'gau_sevaks' : 'members', 'Members', 'সদস্য', 'सदस्य')}</p>
         </div>
 
-        <div className={`bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden ${hasGlobalAccess ? 'cursor-default hover:border-green-400 hover:shadow-xl' : ''}`}>
-           <div className="absolute top-0 right-0 -mr-4 -mt-4 opacity-5 group-hover:opacity-10 transition-opacity"><Banknote size={100}/></div>
-           <div className={`h-14 w-14 mb-4 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border relative z-10 ${hasGlobalAccess ? (treasuryBalance >= 0 ? 'bg-gradient-to-br from-green-50 to-emerald-100 text-green-600 border-green-200' : 'bg-gradient-to-br from-red-50 to-rose-100 text-red-600 border-red-200') : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
-              <Banknote size={26} />
+        <div 
+          onClick={() => { if(hasGlobalAccess && setActiveTab) setActiveTab('treasury'); }}
+          className={`bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-300 hover:-translate-y-1.5 group relative overflow-hidden ${hasGlobalAccess ? 'cursor-pointer hover:border-green-400 hover:shadow-xl' : 'cursor-default'}`}
+        >
+           <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0"><ArrowRight size={16} className="text-green-400"/></div>
+           <div className="absolute bottom-0 right-0 -mr-4 -mb-4 opacity-5 group-hover:opacity-10 transition-opacity"><Banknote size={120}/></div>
+           <div className={`h-16 w-16 mb-4 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border relative z-10 ${hasGlobalAccess ? (treasuryBalance >= 0 ? 'bg-gradient-to-br from-green-50 to-emerald-100 text-green-600 border-green-200' : 'bg-gradient-to-br from-red-50 to-rose-100 text-red-600 border-red-200') : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
+              <Banknote size={28} />
            </div>
-           <p className={`text-2xl sm:text-3xl font-black tracking-tight relative z-10 ${hasGlobalAccess ? (treasuryBalance >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-300 filter blur-sm'}`}>
+           <p className={`text-3xl sm:text-4xl font-black tracking-tight relative z-10 mb-1 ${hasGlobalAccess ? (treasuryBalance >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-300 filter blur-md'}`}>
                {curSymbol}{hasGlobalAccess ? Math.abs(treasuryBalance).toLocaleString() : 'XXX,XXX'}
            </p>
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Net {safeTranslate('nav_treasury', 'Treasury', 'ট্রেজারি', 'ट्रेजरी')?.split('&')[0]}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest relative z-10">Net {safeTranslate('net_treasury', 'Treasury', 'নেট ট্রেজারি', 'नेट ट्रेजरी')}</p>
         </div>
 
-        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center cursor-default group hover:border-blue-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
-           <div className="absolute top-0 right-0 -mr-4 -mt-4 opacity-5 group-hover:opacity-10 transition-opacity"><TrendingUp size={100}/></div>
-           <div className="h-14 w-14 mb-4 bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-blue-200 relative z-10"><TrendingUp size={26} /></div>
-           <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight truncate w-full relative z-10">{curSymbol}{hasGlobalAccess ? globalStats.income.toLocaleString() : personalStats.myDonations.toLocaleString()}</p>
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">{hasGlobalAccess ? `Lifetime ${safeTranslate('funds', 'Funds', 'তহবিল', 'निधि')}` : safeTranslate('my_lifetime', 'My Lifetime', 'আমার আজীবন', 'मेरा आजीवन')}</p>
+        <div 
+          onClick={() => { if(hasGlobalAccess && setActiveTab) setActiveTab('treasury'); }}
+          className={`bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-300 hover:-translate-y-1.5 group relative overflow-hidden ${hasGlobalAccess ? 'cursor-pointer hover:border-blue-400 hover:shadow-xl' : 'cursor-default'}`}
+        >
+           <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0"><ArrowRight size={16} className="text-blue-400"/></div>
+           <div className="absolute bottom-0 right-0 -mr-4 -mb-4 opacity-5 group-hover:opacity-10 transition-opacity"><TrendingUp size={120}/></div>
+           <div className="h-16 w-16 mb-4 bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-blue-200 relative z-10"><TrendingUp size={28} /></div>
+           <p className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight truncate w-full relative z-10 mb-1">{curSymbol}{hasGlobalAccess ? globalStats.income.toLocaleString() : personalStats.myDonations.toLocaleString()}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest relative z-10">{hasGlobalAccess ? `Lifetime ${safeTranslate('funds', 'Funds', 'তহবিল', 'निधि')}` : safeTranslate('my_lifetime', 'My Lifetime', 'আমার আজীবন', 'मेरा आजीवन')}</p>
         </div>
 
-        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center cursor-default group hover:border-purple-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
-           <div className="absolute top-0 right-0 -mr-4 -mt-4 opacity-5 group-hover:opacity-10 transition-opacity"><CalendarDays size={100}/></div>
-           <div className="h-14 w-14 mb-4 bg-gradient-to-br from-purple-50 to-fuchsia-100 text-purple-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-purple-200 relative z-10"><CalendarDays size={26} /></div>
-           <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight relative z-10">{globalStats.activeEvents}</p>
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 relative z-10">Active {safeTranslate('nav_panjika', 'Events', 'ইভেন্ট', 'घटनाएँ')?.split('&')[0]}</p>
+        <div 
+          onClick={() => { if(hasGlobalAccess && setActiveTab) setActiveTab('panjika'); }}
+          className={`bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-300 hover:-translate-y-1.5 group relative overflow-hidden ${hasGlobalAccess ? 'cursor-pointer hover:border-purple-400 hover:shadow-xl' : 'cursor-default'}`}
+        >
+           <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0"><ArrowRight size={16} className="text-purple-400"/></div>
+           <div className="absolute bottom-0 right-0 -mr-4 -mb-4 opacity-5 group-hover:opacity-10 transition-opacity"><CalendarDays size={120}/></div>
+           <div className="h-16 w-16 mb-4 bg-gradient-to-br from-purple-50 to-fuchsia-100 text-purple-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-purple-200 relative z-10"><CalendarDays size={28} /></div>
+           <p className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight relative z-10 mb-1">{globalStats.activeEvents}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest relative z-10">Active {safeTranslate('active_utsav', 'Utsav / Events', 'সক্রিয় উৎসব', 'सक्रिय उत्सव')}</p>
         </div>
       </div>
 
@@ -563,7 +559,7 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <button onClick={() => { if(setActiveTab) setActiveTab('directory'); pushToDataLayer('quick_action_click', { action: 'Add Member' }); }} className="bg-white border border-gray-200 hover:border-sanatani-orange hover:shadow-md p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
               <div className="bg-orange-50 text-sanatani-orange p-3 rounded-full group-hover:scale-110 transition-transform"><UserPlus size={20}/></div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">Add {safeTranslate(workspaceType === 'Goshala' ? 'gau_sevaks' : 'members', 'Member', 'সদস্য', 'सदस्य')}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">{safeTranslate('btn_add_member', 'Add Member', 'সদস্য যোগ করুন', 'सदस्य जोड़ें')}</span>
             </button>
 
             <button onClick={() => { if(setActiveTab) setActiveTab('treasury'); pushToDataLayer('quick_action_click', { action: 'Log Chanda' }); }} className="bg-white border border-gray-200 hover:border-green-500 hover:shadow-md p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
@@ -588,20 +584,23 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
         {/* 🛕 UNIVERSAL MARKETPLACE / POOJA WIDGET */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden flex flex-col group hover:shadow-md transition-shadow">
+        <div 
+          onClick={() => { if(setActiveTab) setActiveTab('pooja'); }} 
+          className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden flex flex-col group hover:shadow-lg hover:border-orange-200 transition-all cursor-pointer"
+        >
            <div className="flex justify-between items-start mb-4">
-             <div className="bg-orange-50 text-orange-600 p-3 rounded-xl border border-orange-100"><Flame size={20}/></div>
-             <button onClick={() => { if(setActiveTab) setActiveTab('pooja'); }} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-orange-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10}/></button>
+             <div className="bg-orange-50 text-orange-600 p-3 rounded-xl border border-orange-100 group-hover:bg-sanatani-orange group-hover:text-white transition-colors"><Flame size={20}/></div>
+             <button className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-orange-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10} className="transform group-hover:translate-x-1 transition-transform"/></button>
            </div>
            <h3 className="text-lg font-black text-gray-900 mb-1">{isPurohitMode ? safeTranslate('my_ritual_diary', 'My Ritual Diary', 'আমার রিচুয়াল ডায়েরি', 'मेरी अनुष्ठान डायरी') : isAdmin ? safeTranslate('universal_marketplace', 'Universal Marketplace', 'গ্লোবাল মার্কেটপ্লেস', 'यूनिवर्सल मार्केटप्लेस') : safeTranslate('nav_pooja', 'Pooja Desk', 'পূজা ডেস্ক', 'पूजा डेस्क')?.split('&')[0]}</h3>
-           
+
            {isAdmin && !isPurohitMode ? (
              <p className="text-xs font-bold text-gray-500 mb-4">Hire Global Scholars & Cover Leave</p>
            ) : (
              <p className="text-xs font-bold text-gray-500 mb-4">{poojaStats.upcomingRituals} Active Reservations</p>
            )}
 
-           <div className="mt-auto bg-gray-50 p-4 rounded-2xl border border-gray-100">
+           <div className="mt-auto bg-gray-50 p-4 rounded-2xl border border-gray-100 group-hover:border-orange-100 group-hover:bg-orange-50/30 transition-colors">
              {poojaStats.nextEvent ? (
                <>
                  <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest mb-1.5 flex items-center gap-1"><BellRing size={10}/> Next Scheduled Ritual</p>
@@ -615,10 +614,13 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
         </div>
 
         {/* ❤️ VIVAH BANDHAN WIDGET */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden flex flex-col group hover:shadow-md transition-shadow">
+        <div 
+          onClick={() => { if(setActiveTab) setActiveTab('vivah'); }}
+          className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden flex flex-col group hover:shadow-lg hover:border-pink-200 transition-all cursor-pointer"
+        >
            <div className="flex justify-between items-start mb-4">
-             <div className="bg-pink-50 text-pink-600 p-3 rounded-xl border border-pink-100"><HeartHandshake size={20}/></div>
-             <button onClick={() => { if(setActiveTab) setActiveTab('vivah'); }} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-pink-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10}/></button>
+             <div className="bg-pink-50 text-pink-600 p-3 rounded-xl border border-pink-100 group-hover:bg-pink-600 group-hover:text-white transition-colors"><HeartHandshake size={20}/></div>
+             <button className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-pink-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10} className="transform group-hover:translate-x-1 transition-transform"/></button>
            </div>
            <h3 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('nav_vivah', 'Vivah Bandhan', 'বিবাহ বন্ধন', 'विवाह बंधन')}</h3>
            {isAdmin ? (
@@ -627,27 +629,30 @@ export default function DashboardHome({ session, isOnline = navigator.onLine, se
              <p className="text-xs font-bold text-gray-500 mb-4">{safeTranslate('vivah_subtitle', 'Sanatan Matchmaking', 'সনাতন ম্যাচমেকিং', 'सनातन मैचमेकिंग')?.split('.')[0]}</p>
            )}
 
-           <div className="mt-auto bg-pink-50/50 p-4 rounded-2xl border border-pink-100 flex items-center justify-between">
+           <div className="mt-auto bg-pink-50/50 p-4 rounded-2xl border border-pink-100 flex items-center justify-between group-hover:bg-pink-100/50 transition-colors">
               <div>
                 <p className="text-[9px] font-black text-pink-700 uppercase tracking-widest mb-1">Pending Requests</p>
                 <p className="text-xl font-black text-pink-600">{vivahStats.pendingRequests}</p>
               </div>
-              <button onClick={() => { if(setActiveTab) setActiveTab('vivah'); }} className="bg-white p-2.5 rounded-xl border border-pink-200 text-pink-600 shadow-sm hover:bg-pink-600 hover:text-white transition-colors">
+              <div className="bg-white p-2.5 rounded-xl border border-pink-200 text-pink-600 shadow-sm transition-colors">
                 <ArrowRight size={16}/>
-              </button>
+              </div>
            </div>
         </div>
 
         {/* 📆 PANJIKA EVENT WIDGET */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden flex flex-col group hover:shadow-md transition-shadow">
+        <div 
+          onClick={() => { if(setActiveTab) setActiveTab('panjika'); }}
+          className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden flex flex-col group hover:shadow-lg hover:border-purple-200 transition-all cursor-pointer"
+        >
            <div className="flex justify-between items-start mb-4">
-             <div className="bg-purple-50 text-purple-600 p-3 rounded-xl border border-purple-100"><CalendarDays size={20}/></div>
-             <button onClick={() => { if(setActiveTab) setActiveTab('panjika'); }} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-purple-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10}/></button>
+             <div className="bg-purple-50 text-purple-600 p-3 rounded-xl border border-purple-100 group-hover:bg-purple-600 group-hover:text-white transition-colors"><CalendarDays size={20}/></div>
+             <button className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-purple-500 transition-colors flex items-center gap-1">Open Desk <ArrowRight size={10} className="transform group-hover:translate-x-1 transition-transform"/></button>
            </div>
            <h3 className="text-lg font-black text-gray-900 mb-1">{safeTranslate('nav_panjika', 'Utsav Panjika', 'উৎসব পঞ্জিকা', 'उत्सव पंचांग')?.split('&')[0]}</h3>
            <p className="text-xs font-bold text-gray-500 mb-4">{globalStats.activeEvents} Upcoming Events</p>
 
-           <div className="mt-auto bg-purple-50/50 p-4 rounded-2xl border border-purple-100">
+           <div className="mt-auto bg-purple-50/50 p-4 rounded-2xl border border-purple-100 group-hover:bg-purple-100/50 transition-colors">
              {panjikaNext ? (
                <>
                  <p className="text-[9px] font-black text-purple-700 uppercase tracking-widest mb-1.5 flex items-center gap-1"><CalendarDays size={10}/> Next Event</p>
