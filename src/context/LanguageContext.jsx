@@ -155,6 +155,9 @@ export const translations = {
     my_lifetime: "My Lifetime",
     universal_marketplace: "Universal Marketplace",
     pending_ledger_access: "Pending Ledger Access Requests",
+    today_panjika: "Today in Panjika",
+    net_treasury: "Treasury",
+    active_utsav: "Utsav / Events",
 
     // ✨ ENTERPRISE DIRECTORY, PROFILE & HUB KEYS 
     req_identity_data: "Required Identity Data",
@@ -586,6 +589,9 @@ export const translations = {
     my_lifetime: "আমার আজীবন",
     universal_marketplace: "গ্লোবাল মার্কেটপ্লেস",
     pending_ledger_access: "অপেক্ষমান লেজার অ্যাক্সেস অনুরোধ",
+    today_panjika: "আজকের পঞ্জিকা",
+    net_treasury: "নেট ট্রেজারি",
+    active_utsav: "সক্রিয় উৎসব",
 
     signed_in_as: "লগইন করেছেন",
     my_profile: "আমার প্রোফাইল",
@@ -1024,6 +1030,9 @@ export const translations = {
     my_lifetime: "मेरा आजीवन",
     universal_marketplace: "यूनिवर्सल मार्केटप्लेस",
     pending_ledger_access: "लंबित खाता पहुंच अनुरोध",
+    today_panjika: "आज का पंचांग",
+    net_treasury: "नेट ट्रेजरी",
+    active_utsav: "सक्रिय उत्सव",
 
     signed_in_as: "लॉग इन किया है",
     my_profile: "मेरी प्रोफ़ाइल",
