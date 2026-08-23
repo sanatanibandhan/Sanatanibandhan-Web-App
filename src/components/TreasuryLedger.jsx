@@ -7,7 +7,8 @@ import {
   History, Edit, CalendarDays, FileText, Lock, ChevronDown, ChevronUp, User, 
   UserCheck, Filter, ChevronLeft, ChevronRight, X, AlertCircle, FileDigit, 
   Camera, Image as ImageIcon, ArrowUpDown, HelpCircle, Lightbulb, CheckCircle2,
-  WifiOff, Heart, AlertTriangle, BrainCircuit, Scale, Package, Repeat, Send, Box
+  WifiOff, Heart, AlertTriangle, BrainCircuit, Scale, Package, Repeat, Send, Box,
+  Clock, Trash2 // ✨ FIXED: Missing icons added here!
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { pushToDataLayer } from '../utils/gtm'; 
@@ -51,22 +52,6 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
       case 'MANDIR':
       default: return safeTranslate('workspace_mandir', 'Mandir', 'মন্দির', 'मंदिर');
     }
-  }, [workspaceType, language, t]);
-
-  // ✨ Dynamic Tab Labels based on Org Type
-  const assetTabLabel = useMemo(() => {
-    const wt = String(workspaceType || '').toUpperCase();
-    if (wt === 'GOSHALA') return safeTranslate('tab_gau_fodder', 'Gau Fodder & Assets', 'গোখাদ্য ও সম্পদ', 'गौ चारा और संपत्ति');
-    if (wt === 'ASHRAM' || wt === 'SANGHA') return safeTranslate('tab_annadaan_assets', 'Annadaan & Assets', 'অন্নদান ও সম্পদ', 'अन्नदान और संपत्ति');
-    if (wt === 'PUROHIT') return safeTranslate('tab_vastra_dakshina', 'Vastra & Gifts', 'বস্ত্র ও উপহার', 'वस्त्र और उपहार');
-    return safeTranslate('tab_bhandara_assets', 'Bhandara & Assets', 'ভান্ডারা ও সম্পদ', 'भंडारा और संपत्ति');
-  }, [workspaceType, language, t]);
-
-  const pledgeTabLabel = useMemo(() => {
-    const wt = String(workspaceType || '').toUpperCase();
-    if (wt === 'GOSHALA') return safeTranslate('tab_gau_palan', 'Gau Palan Pledges', 'গোপালন প্রতিশ্রুতি', 'गौ पालन प्रतिज्ञा');
-    if (wt === 'ASHRAM' || wt === 'SANGHA') return safeTranslate('tab_guru_seva', 'Guru Seva Pledges', 'গুরু সেবা প্রতিশ্রুতি', 'गुरु सेवा प्रतिज्ञा');
-    return safeTranslate('tab_masik_chanda', 'Masik Chanda', 'মাসিক চাঁদা', 'मासिक चंदा');
   }, [workspaceType, language, t]);
 
   const [activeTab, setActiveTab] = useState('INCOME'); // 'INCOME' | 'EXPENSE' | 'ASSETS' | 'PLEDGES' | 'P_AND_L'
@@ -139,6 +124,7 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
   const memberDropdownRef = useRef(null);
   const eventDropdownRef = useRef(null);
   const expenseMemberDropdownRef = useRef(null);
+  
   const isRestricted = session?.role === 'MEMBER' || session?.role === 'DEVOTEE';
   const isStaff = session?.role === 'ADMIN' || session?.role === 'SUPER_ADMIN' || session?.role === 'MANAGER';
   const curSymbol = session?.currency?.symbol || '৳';
@@ -195,7 +181,7 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
     const unsubMem = onValue(memRef, (snap) => {
       if (snap.exists()) {
         const data = snap.val();
-        const arr = Object.keys(data).map(k => ({ id: k, name: data[k].name, phone: data[k].phone, role: data[key].role }));
+        const arr = Object.keys(data).map(key => ({ id: key, name: data[key].name, phone: data[key].phone, role: data[key].role }));
         setMembers(arr); localStorage.setItem(`sb_members_${session.communityId}`, JSON.stringify(arr));
       }
     });
@@ -203,7 +189,7 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
     const unsubEvent = onValue(eventRef, (snap) => {
       if (snap.exists()) {
         const data = snap.val();
-        const arr = Object.keys(data).map(k => data[k].title);
+        const arr = Object.keys(data).map(key => data[key].title);
         const expEvents = [...new Set(expenses.map(e => e.eventName))];
         const mergedEvents = [...new Set([...arr, ...expEvents])].filter(Boolean);
         setEvents(mergedEvents); localStorage.setItem(`sb_events_${session.communityId}`, JSON.stringify(mergedEvents));
@@ -299,6 +285,22 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
       if (match) setAssetForm({...assetForm, donorName: groupName.split(' (')[0], donorId: `SB-${match[1]}`});
       setShowAssetModal(true);
     }
+  };
+
+  // ✨ FIXED: Added the handleDelete function that was missing!
+  const handleDelete = (id, path, name) => {
+    setConfirmDialog({
+      title: safeTranslate('delete_record', 'Delete Record', 'রেকর্ড মুছুন', 'रिकॉर्ड हटाएं'),
+      message: `${safeTranslate('delete_confirm_desc', 'Are you sure you want to permanently delete', 'আপনি কি নিশ্চিত যে আপনি এটি মুছে ফেলতে চান', 'क्या आप निश्चित रूप से हटाना चाहते हैं')} ${name}?`,
+      confirmText: safeTranslate('btn_delete', 'DELETE', 'মুছুন', 'हटाएं'),
+      isDanger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await executeSafeUpdate({ [`communities/${session.communityId}/${path}/${id}`]: null }, safeTranslate('record_deleted', 'Record deleted.', 'রেকর্ড মুছে ফেলা হয়েছে।', 'रिकॉर्ड हटा दिया गया।'));
+        } catch (err) {}
+      }
+    });
   };
 
   // 💰 HANDLE CASH INCOME
@@ -837,10 +839,10 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
             </button>
           )}
           <button onClick={() => { setActiveTab('ASSETS'); setExpandedGroup(null); }} className={`flex-1 min-w-[80px] rounded-xl text-[10px] sm:text-xs font-black tracking-widest uppercase transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 px-2 ${activeTab === 'ASSETS' ? 'bg-white text-indigo-600 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
-            <Package size={14} className="hidden sm:block" /> {safeTranslate('tab_assets', 'Assets')}
+            <Package size={14} className="hidden sm:block" /> {assetTabLabel}
           </button>
           <button onClick={() => { setActiveTab('PLEDGES'); setExpandedGroup(null); }} className={`flex-1 min-w-[80px] rounded-xl text-[10px] sm:text-xs font-black tracking-widest uppercase transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 px-2 ${activeTab === 'PLEDGES' ? 'bg-white text-purple-600 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
-            <Repeat size={14} className="hidden sm:block" /> {safeTranslate('tab_pledges', 'Pledges')}
+            <Repeat size={14} className="hidden sm:block" /> {pledgeTabLabel}
           </button>
           {!isRestricted && (
             <button onClick={() => { setActiveTab('P_AND_L'); setExpandedGroup(null); }} className={`flex-1 min-w-[80px] rounded-xl text-[10px] sm:text-xs font-black tracking-widest uppercase transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 px-2 ${activeTab === 'P_AND_L' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -1017,13 +1019,7 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
                     {!isRestricted && (
                       <div className="mt-auto pt-4 border-t border-gray-100 flex gap-2">
                         {isOverdue ? (
-                          <button onClick={() => {
-                            const term = pledge.frequency === 'MONTHLY' ? safeTranslate('monthly', 'monthly') : safeTranslate('yearly', 'yearly');
-                            const msg = `Namaskar ${pledge.memberName} 🙏\n\nThis is a gentle reminder for your ${term} Seva Sankalp (${curSymbol}${pledge.committedAmount}) to ${session.communityName}. Your contribution sustains our daily rituals and community operations.\n\nTo fulfill your pledge, you can visit the Mandir or reply to this message for digital transfer details.\n\nMay Bhagavan bless you abundantly. ✨\n— ${session.userName}`;
-                            const url = pledge.memberPhone ? `https://wa.me/${pledge.memberPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-                            window.open(url, '_blank');
-                            pushToDataLayer('share', { method: 'WhatsApp', content_type: 'Pledge Reminder' });
-                          }} className="flex-1 bg-green-50 hover:bg-green-600 hover:text-white text-green-700 border border-green-200 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-sm">
+                          <button onClick={() => sendPledgeReminder(pledge)} className="flex-1 bg-green-50 hover:bg-green-600 hover:text-white text-green-700 border border-green-200 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-sm">
                             <Send size={14}/> Reminder
                           </button>
                         ) : (
