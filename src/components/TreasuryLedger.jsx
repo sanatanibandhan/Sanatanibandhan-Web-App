@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ref, onValue, push, update } from 'firebase/database';
+import { ref, onValue, push, update, remove } from 'firebase/database';
 import { db } from '../firebase';
 import { useLanguage } from '../context/LanguageContext';
 import { pushToDataLayer } from '../utils/gtm';
@@ -9,7 +9,7 @@ import {
   Download, Plus, Camera, Loader2, X, AlertTriangle, 
   CheckCircle2, WifiOff, FileDigit, CalendarDays, Receipt, 
   FileText, ZoomIn, Package, Box, Flame, Sparkles, User,
-  ShieldCheck, FileDown, UploadCloud, Heart // ✨ CRITICAL FIX: All missing imports added
+  ShieldCheck, FileDown, UploadCloud, Heart, Trash2, Edit
 } from 'lucide-react';
 import { generateTreasuryReportPdf, generateReceiptPdf } from '../utils/pdfGenerator';
 import { usePlanGate } from '../hooks/usePlanGate';
@@ -25,18 +25,26 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
   // Data States
   const [incomeLogs, setIncomeLogs] = useState([]);
   const [expenseLogs, setExpenseLogs] = useState([]);
+  const [assetLogs, setAssetLogs] = useState([]);
+  const [inventoryLogs, setInventoryLogs] = useState([]);
+  const [members, setMembers] = useState([]); // Directory for Autocomplete
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
   // Modals & Forms
   const [showFormModal, setShowFormModal] = useState(false);
-  const [formType, setFormType] = useState('INCOME'); // 'INCOME' | 'EXPENSE'
+  const [formType, setFormType] = useState('INCOME'); // 'INCOME' | 'EXPENSE' | 'ASSET' | 'INVENTORY'
   const [submitting, setSubmitting] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
 
   // Form Data
   const [formData, setFormData] = useState({
-    amount: '', note: '', name: '', paymentMethod: 'CASH', memoUrl: ''
+    amount: '', note: '', name: '', paymentMethod: 'CASH', memoUrl: '', 
+    handledBy: session?.userName || '', status: 'GOOD', unit: 'pcs'
   });
+  
+  // Autocomplete UI States
+  const [showNameDropdown, setShowNameDropdown] = useState(false);
+  const [showHandledDropdown, setShowHandledDropdown] = useState(false);
   const photoRef = useRef(null);
 
   // Toast & Confirm
@@ -50,6 +58,7 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
 
   const curSymbol = session?.currency?.symbol || '৳';
   const isStaff = session?.role === 'ADMIN' || session?.role === 'SUPER_ADMIN' || session?.role === 'MANAGER';
+  const isAdmin = session?.role === 'ADMIN' || session?.role === 'SUPER_ADMIN';
 
   // ✨ FAIL-SAFE TRANSLATION HELPER
   const safeTranslate = (key, fallbackEn, fallbackBn, fallbackHi) => {
@@ -70,10 +79,16 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
     if (!session?.communityId) return;
     pushToDataLayer('view_treasury', { workspace_type: workspaceType });
 
-    const incRef = ref(db, `communities/${session.communityId}/logs/Donation`);
-    const expRef = ref(db, `communities/${session.communityId}/logs/Expense`);
+    const commRef = `communities/${session.communityId}`;
+    
+    // Fetch Members for Autocomplete
+    onValue(ref(db, `${commRef}/members`), (snap) => {
+      if (snap.exists()) setMembers(Object.values(snap.val()));
+      else setMembers([]);
+    });
 
-    const unsubInc = onValue(incRef, (snap) => {
+    // Fetch Financials
+    onValue(ref(db, `${commRef}/logs/Donation`), (snap) => {
       if (snap.exists()) {
         const arr = Object.keys(snap.val()).map(k => ({ id: k, ...snap.val()[k] }));
         arr.sort((a, b) => b.timestamp - a.timestamp);
@@ -81,17 +96,34 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
       } else setIncomeLogs([]);
     });
 
-    const unsubExp = onValue(expRef, (snap) => {
+    onValue(ref(db, `${commRef}/logs/Expense`), (snap) => {
       if (snap.exists()) {
         const arr = Object.keys(snap.val()).map(k => ({ id: k, ...snap.val()[k] }));
         arr.sort((a, b) => b.timestamp - a.timestamp);
         setExpenseLogs(arr);
       } else setExpenseLogs([]);
+    });
+
+    // Fetch Assets & Inventory
+    onValue(ref(db, `${commRef}/assets`), (snap) => {
+      if (snap.exists()) {
+        const arr = Object.keys(snap.val()).map(k => ({ id: k, ...snap.val()[k] }));
+        arr.sort((a, b) => b.timestamp - a.timestamp);
+        setAssetLogs(arr);
+      } else setAssetLogs([]);
+    });
+
+    onValue(ref(db, `${commRef}/inventory`), (snap) => {
+      if (snap.exists()) {
+        const arr = Object.keys(snap.val()).map(k => ({ id: k, ...snap.val()[k] }));
+        arr.sort((a, b) => b.timestamp - a.timestamp);
+        setInventoryLogs(arr);
+      } else setInventoryLogs([]);
       setLoading(false);
     });
 
-    const failsafe = setTimeout(() => setLoading(false), 1200);
-    return () => { unsubInc(); unsubExp(); clearTimeout(failsafe); };
+    const failsafe = setTimeout(() => setLoading(false), 1500);
+    return () => clearTimeout(failsafe);
   }, [session?.communityId, workspaceType]);
 
   const executeSafeUpdate = async (updates, successMsg = null) => {
@@ -115,7 +147,6 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      // ✨ ZERO COST CANVAS COMPRESSION ENGINE
       const img = document.createElement('img');
       img.onload = () => {
         const canvas = document.createElement('canvas');
@@ -141,17 +172,57 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isStaff) return showToast(safeTranslate('err_unauthorized', 'Unauthorized.'), 'error');
-    if (!formData.amount || !formData.note) return showToast(safeTranslate('err_all_fields_req', 'Amount and Note are required.'), 'error');
+    if (!formData.name) return showToast('Name field is required.', 'error');
 
     setSubmitting(true);
     try {
-      const amt = parseFloat(formData.amount);
       const ts = Date.now();
+      const updates = {};
+      const commRef = `communities/${session.communityId}`;
+
+      // 🗂️ ASSET & INVENTORY LOGIC
+      if (formType === 'ASSET' || formType === 'INVENTORY') {
+        const amt = parseFloat(formData.amount) || 0;
+        const targetNode = formType === 'ASSET' ? 'assets' : 'inventory';
+        const docId = push(ref(db, `${commRef}/${targetNode}`)).key;
+        
+        updates[`${commRef}/${targetNode}/${docId}`] = {
+          id: docId,
+          name: formData.name.trim(),
+          [formType === 'ASSET' ? 'value' : 'quantity']: amt,
+          unit: formType === 'INVENTORY' ? formData.unit : null,
+          status: formData.status,
+          note: formData.note.trim(),
+          handledBy: formData.handledBy.trim() || session.userName,
+          timestamp: ts
+        };
+
+        const auditId = push(ref(db, `${commRef}/audit_logs`)).key;
+        updates[`${commRef}/audit_logs/${auditId}`] = {
+          id: auditId,
+          actionType: `${formType}_ADDED`,
+          managerName: session.userName,
+          description: `Added ${formData.name} to ${targetNode}.`,
+          timestamp: ts
+        };
+
+        await executeSafeUpdate(updates, `${formData.name} successfully added to ledger.`);
+        setShowFormModal(false);
+        setFormData({ amount: '', note: '', name: '', paymentMethod: 'CASH', memoUrl: '', handledBy: session.userName, status: 'GOOD', unit: 'pcs' });
+        setSubmitting(false);
+        return;
+      }
+
+      // 💵 INCOME & EXPENSE LOGIC
+      if (!formData.amount || !formData.note) {
+        setSubmitting(false);
+        return showToast(safeTranslate('err_all_fields_req', 'Amount and Note are required.'), 'error');
+      }
+
+      const amt = parseFloat(formData.amount);
       const isIncome = formType === 'INCOME';
       const path = isIncome ? 'Donation' : 'Expense';
-      
-      const transId = push(ref(db, `communities/${session.communityId}/logs/${path}`)).key;
-      const updates = {};
+      const transId = push(ref(db, `${commRef}/logs/${path}`)).key;
       
       const basePayload = {
         id: transId,
@@ -159,22 +230,29 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
         note: formData.note.trim() + ` | Via: ${formData.paymentMethod}`,
         timestamp: ts,
         paymentMethod: formData.paymentMethod,
-        collector: `${session.userName} (${session.uid})`,
+        collector: formData.handledBy.trim() || `${session.userName} (${session.uid})`,
         role: session.role
       };
 
       if (isIncome) {
-        basePayload.name = formData.name.trim() || 'Anonymous Devotee';
+        basePayload.name = formData.name.trim() || 'Guest Devotee';
+        // Auto-link to member if perfectly matches name in directory
+        const matchedMember = members.find(m => m.name.toLowerCase() === formData.name.trim().toLowerCase());
+        if (matchedMember) {
+          basePayload.donorId = matchedMember.id;
+          updates[`${commRef}/members/${matchedMember.id}/totalDonated`] = increment(amt);
+          updates[`${commRef}/members/${matchedMember.id}/lastDonationTimestamp`] = ts;
+        }
       } else {
         basePayload.itemName = formData.name.trim() || 'General Expense';
         if (formData.memoUrl) basePayload.memoUrl = formData.memoUrl;
       }
 
-      updates[`communities/${session.communityId}/logs/${path}/${transId}`] = basePayload;
+      updates[`${commRef}/logs/${path}/${transId}`] = basePayload;
 
       // Audit Log
-      const auditId = push(ref(db, `communities/${session.communityId}/audit_logs`)).key;
-      updates[`communities/${session.communityId}/audit_logs/${auditId}`] = {
+      const auditId = push(ref(db, `${commRef}/audit_logs`)).key;
+      updates[`${commRef}/audit_logs/${auditId}`] = {
         id: auditId,
         actionType: isIncome ? 'INCOME_LOGGED' : 'EXPENSE_LOGGED',
         managerName: session.userName,
@@ -197,12 +275,32 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
       });
 
       setShowFormModal(false);
-      setFormData({ amount: '', note: '', name: '', paymentMethod: 'CASH', memoUrl: '' });
+      setFormData({ amount: '', note: '', name: '', paymentMethod: 'CASH', memoUrl: '', handledBy: session.userName, status: 'GOOD', unit: 'pcs' });
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleDeleteLedgerItem = (itemId, type) => {
+    if (!isAdmin) return showToast("Only Head Admins can delete ledger entries.", "error");
+    setConfirmDialog({
+      title: "Delete Record",
+      message: "Are you sure you want to permanently erase this record from the ledger?",
+      confirmText: "DELETE",
+      isDanger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const targetNode = type === 'ASSET' ? 'assets' : 'inventory';
+          await remove(ref(db, `communities/${session.communityId}/${targetNode}/${itemId}`));
+          showToast("Record successfully erased.");
+        } catch (e) {
+          showToast(e.message, "error");
+        }
+      }
+    });
   };
 
   const handleDownloadMasterReport = async () => {
@@ -218,6 +316,20 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
       showToast("Error generating report: " + e.message, "error");
     }
   };
+
+  // Autocomplete Suggestions
+  const nameSuggestions = useMemo(() => {
+    if (!formData.name.trim()) return members.slice(0, 5);
+    return members.filter(m => m.name.toLowerCase().includes(formData.name.toLowerCase())).slice(0, 5);
+  }, [members, formData.name]);
+
+  const handledBySuggestions = useMemo(() => {
+    const managers = members.filter(m => m.role === 'ADMIN' || m.role === 'MANAGER');
+    if (!formData.handledBy.trim()) return managers.slice(0, 5);
+    return managers.filter(m => m.name.toLowerCase().includes(formData.handledBy.toLowerCase())).slice(0, 5);
+  }, [members, formData.handledBy]);
+
+  const isGuest = formType === 'INCOME' && formData.name.trim() !== '' && !members.some(m => m.name.toLowerCase() === formData.name.trim().toLowerCase());
 
   // Filters & Calculations
   const filteredIncome = useMemo(() => {
@@ -235,6 +347,14 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
       return matchSearch && matchDate;
     });
   }, [expenseLogs, searchTerm, dateRange]);
+
+  const filteredAssets = useMemo(() => {
+    return assetLogs.filter(log => (log.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [assetLogs, searchTerm]);
+
+  const filteredInventory = useMemo(() => {
+    return inventoryLogs.filter(log => (log.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [inventoryLogs, searchTerm]);
 
   const totalIncome = incomeLogs.reduce((sum, item) => sum + (item.amount || 0), 0);
   const totalExpense = expenseLogs.reduce((sum, item) => sum + (item.amount || 0), 0);
@@ -308,7 +428,7 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
             </p>
           </div>
 
-          <div className="flex gap-3 w-full lg:w-auto">
+          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             {isStaff && (
               <>
                 <button onClick={() => { setFormType('EXPENSE'); setShowFormModal(true); }} className="flex-1 sm:flex-none bg-red-600/20 hover:bg-red-600/40 border border-red-500/50 text-red-100 px-6 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all backdrop-blur-md hover:-translate-y-0.5">
@@ -371,25 +491,42 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
             <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input type="text" placeholder={safeTranslate('search_records', "Search records...")} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:bg-white focus:border-sanatani-orange transition-colors shadow-inner" />
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto bg-gray-50 border border-gray-200 p-1.5 rounded-xl shadow-inner overflow-x-auto">
-            <Filter size={12} className="text-gray-400 ml-2 hidden sm:block"/>
-            <input type="date" value={dateRange.start} onChange={e => setDateRange({ ...dateRange, start: e.target.value })} className="p-1 bg-transparent text-[10px] text-gray-700 font-bold outline-none flex-1 min-w-[90px] cursor-pointer" />
-            <span className="text-gray-300 font-bold">-</span>
-            <input type="date" value={dateRange.end} onChange={e => setDateRange({ ...dateRange, end: e.target.value })} className="p-1 bg-transparent text-[10px] text-gray-700 font-bold outline-none flex-1 min-w-[90px] cursor-pointer" />
-            {(dateRange.start || dateRange.end) && (
-              <button onClick={() => setDateRange({start:'', end:''})} className="bg-gray-200 hover:bg-gray-300 p-1.5 rounded-lg transition-colors mr-1"><X size={12}/></button>
-            )}
-          </div>
+          
+          {(activeTab === 'INCOME' || activeTab === 'EXPENSE') && (
+            <div className="flex items-center gap-2 w-full sm:w-auto bg-gray-50 border border-gray-200 p-1.5 rounded-xl shadow-inner overflow-x-auto">
+              <Filter size={12} className="text-gray-400 ml-2 hidden sm:block"/>
+              <input type="date" value={dateRange.start} onChange={e => setDateRange({ ...dateRange, start: e.target.value })} className="p-1 bg-transparent text-[10px] text-gray-700 font-bold outline-none flex-1 min-w-[90px] cursor-pointer" />
+              <span className="text-gray-300 font-bold">-</span>
+              <input type="date" value={dateRange.end} onChange={e => setDateRange({ ...dateRange, end: e.target.value })} className="p-1 bg-transparent text-[10px] text-gray-700 font-bold outline-none flex-1 min-w-[90px] cursor-pointer" />
+              {(dateRange.start || dateRange.end) && (
+                <button onClick={() => setDateRange({start:'', end:''})} className="bg-gray-200 hover:bg-gray-300 p-1.5 rounded-lg transition-colors mr-1"><X size={12}/></button>
+              )}
+            </div>
+          )}
 
           {(activeTab === 'INCOME' || activeTab === 'EXPENSE') && isStaff && (
             <button onClick={handleDownloadMasterReport} className="w-full sm:w-auto bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all hover:-translate-y-0.5 shrink-0">
               <Download size={14}/> Master PDF
             </button>
           )}
+
+          {/* ADD BUTTONS FOR ASSETS AND INVENTORY */}
+          {activeTab === 'ASSETS' && isStaff && (
+             <button onClick={() => { setFormType('ASSET'); setShowFormModal(true); }} className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all hover:-translate-y-0.5 shrink-0">
+               <Plus size={14}/> Add Asset
+             </button>
+          )}
+          {activeTab === 'INVENTORY' && isStaff && (
+             <button onClick={() => { setFormType('INVENTORY'); setShowFormModal(true); }} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all hover:-translate-y-0.5 shrink-0">
+               <Plus size={14}/> Add Inventory
+             </button>
+          )}
         </div>
       </div>
 
-      {/* DATA LIST AREA */}
+      {/* ========================================================================= */}
+      {/* 💵 DATA LIST AREA: INCOME & EXPENSE                                       */}
+      {/* ========================================================================= */}
       {(activeTab === 'INCOME' || activeTab === 'EXPENSE') && (
         <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in flex-1">
           <div className="overflow-x-auto">
@@ -452,26 +589,93 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
         </div>
       )}
 
-      {/* STUBS FOR ASSETS & INVENTORY */}
+      {/* ========================================================================= */}
+      {/* 📦 DATA LIST AREA: ASSETS & INVENTORY (NOW UNLOCKED!)                     */}
+      {/* ========================================================================= */}
       {(activeTab === 'ASSETS' || activeTab === 'INVENTORY') && (
-        <div className="flex-1 bg-white rounded-3xl border border-dashed border-gray-300 flex flex-col items-center justify-center p-20 animate-in fade-in shadow-sm">
-           {activeTab === 'ASSETS' ? <Box size={64} className="text-gray-300 mb-4"/> : <Package size={64} className="text-gray-300 mb-4"/>}
-           <h3 className="text-2xl font-black text-gray-900 mb-2">{activeTab === 'ASSETS' ? assetTabLabel : inventoryTabLabel} Ledger</h3>
-           <p className="text-sm font-bold text-gray-500 max-w-md text-center">This specialized ledger module is currently locked in your environment. Contact Master Admin to activate asset and inventory tracking.</p>
+        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in flex-1">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50/80 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                  <th className="p-5 pl-8">Date Added</th>
+                  <th className="p-5">{activeTab === 'ASSETS' ? 'Asset Name' : 'Item Name'}</th>
+                  <th className="p-5">{activeTab === 'ASSETS' ? 'Value / Cost' : 'Quantity in Stock'}</th>
+                  <th className="p-5">Status</th>
+                  <th className="p-5 pr-8 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
+                {(activeTab === 'ASSETS' ? filteredAssets : filteredInventory).length > 0 ? (activeTab === 'ASSETS' ? filteredAssets : filteredInventory).map(item => (
+                  <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
+                    <td className="p-5 pl-8 whitespace-nowrap">
+                      <p className="text-sm font-black text-gray-900">{new Date(item.timestamp).toLocaleDateString()}</p>
+                    </td>
+                    <td className="p-5">
+                      <p className="text-sm font-black text-gray-900">{item.name}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 truncate max-w-xs">{item.note}</p>
+                    </td>
+                    <td className="p-5">
+                      {activeTab === 'ASSETS' ? (
+                        <span className="font-black text-gray-900">{curSymbol}{item.value?.toLocaleString()}</span>
+                      ) : (
+                        <span className="font-black text-gray-900">{item.quantity} {item.unit}</span>
+                      )}
+                    </td>
+                    <td className="p-5">
+                      <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border shadow-sm ${
+                        item.status === 'GOOD' || item.status === 'IN_STOCK' ? 'bg-green-50 text-green-700 border-green-200' :
+                        item.status === 'DAMAGED' || item.status === 'CONSUMED' ? 'bg-red-50 text-red-700 border-red-200' :
+                        'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {item.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="p-5 pr-8 text-center">
+                      {isAdmin && (
+                        <button onClick={() => handleDeleteLedgerItem(item.id, activeTab)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100" title="Erase Record">
+                          <Trash2 size={16}/>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan="5" className="p-20 text-center text-gray-400">
+                      {activeTab === 'ASSETS' ? <Box size={48} className="mx-auto mb-4 opacity-20 text-purple-600"/> : <Package size={48} className="mx-auto mb-4 opacity-20 text-blue-600"/>}
+                      <p className="text-lg font-black text-gray-800 mb-1">No {activeTab.toLowerCase()} records found.</p>
+                      <p className="text-[10px] uppercase tracking-widest font-bold">Use the Add button to populate the ledger.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: RECORD INCOME OR EXPENSE                                           */}
+      {/* 📝 MODAL: MASTER FORM ENTRY (INCOME, EXPENSE, ASSETS, INVENTORY)          */}
       {/* ========================================================================= */}
       {showFormModal && createPortal(
         <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-md z-[9999] flex items-center justify-center p-2 sm:p-4 pt-safe pb-safe">
           <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh] ring-1 ring-white/20">
             
-            <div className={`p-6 sm:p-8 flex justify-between items-center shrink-0 border-b-4 ${formType === 'INCOME' ? 'bg-green-50 border-green-500 text-green-900' : 'bg-red-50 border-red-500 text-red-900'}`}>
+            <div className={`p-6 sm:p-8 flex justify-between items-center shrink-0 border-b-4 ${
+              formType === 'INCOME' ? 'bg-green-50 border-green-500 text-green-900' : 
+              formType === 'EXPENSE' ? 'bg-red-50 border-red-500 text-red-900' :
+              formType === 'ASSET' ? 'bg-purple-50 border-purple-500 text-purple-900' :
+              'bg-blue-50 border-blue-500 text-blue-900'
+            }`}>
               <h3 className="text-xl sm:text-2xl font-black flex items-center gap-3 tracking-tight">
-                {formType === 'INCOME' ? <TrendingUp size={28}/> : <TrendingDown size={28}/>}
-                {formType === 'INCOME' ? safeTranslate('btn_record_chanda', 'Record Income') : safeTranslate('btn_record_expense', 'Record Expense')}
+                {formType === 'INCOME' && <TrendingUp size={28}/>}
+                {formType === 'EXPENSE' && <TrendingDown size={28}/>}
+                {formType === 'ASSET' && <Box size={28}/>}
+                {formType === 'INVENTORY' && <Package size={28}/>}
+                {formType === 'INCOME' && safeTranslate('btn_record_chanda', 'Record Income')}
+                {formType === 'EXPENSE' && safeTranslate('btn_record_expense', 'Record Expense')}
+                {formType === 'ASSET' && 'Add Temple Asset'}
+                {formType === 'INVENTORY' && 'Add Store Inventory'}
               </h3>
               <button onClick={() => setShowFormModal(false)} className="p-2.5 bg-white/50 hover:bg-white rounded-full transition-colors shadow-sm"><X size={20}/></button>
             </div>
@@ -479,30 +683,119 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
             <div className="p-6 sm:p-8 overflow-y-auto flex-1 scrollbar-hide">
               <form onSubmit={handleSubmit} className="space-y-6">
                 
+                {/* DYNAMIC AMOUNT/QUANTITY HEADER BOX */}
                 <div className="bg-gray-50 p-6 rounded-3xl shadow-inner border border-gray-200">
-                  <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${formType === 'INCOME' ? 'text-green-700' : 'text-red-700'}`}>Amount ({curSymbol}) *</label>
-                  <input type="number" required value={formData.amount} onChange={e=>setFormData({...formData, amount: e.target.value})} className={`w-full p-4 bg-white border-2 rounded-2xl text-3xl font-black outline-none transition-all shadow-sm ${formType === 'INCOME' ? 'border-green-200 text-green-600 focus:border-green-500 focus:ring-4 focus:ring-green-50' : 'border-red-200 text-red-600 focus:border-red-500 focus:ring-4 focus:ring-red-50'}`} placeholder="0.00" autoFocus />
+                  <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${
+                    formType === 'INCOME' ? 'text-green-700' : formType === 'EXPENSE' ? 'text-red-700' : 'text-gray-700'
+                  }`}>
+                    {formType === 'INVENTORY' ? 'Quantity' : `Amount / Value (${curSymbol})`} *
+                  </label>
+                  <input 
+                    type="number" required 
+                    value={formData.amount} onChange={e=>setFormData({...formData, amount: e.target.value})} 
+                    className={`w-full p-4 bg-white border-2 rounded-2xl text-3xl font-black outline-none transition-all shadow-sm ${
+                      formType === 'INCOME' ? 'border-green-200 text-green-600 focus:border-green-500 focus:ring-4 focus:ring-green-50' : 
+                      formType === 'EXPENSE' ? 'border-red-200 text-red-600 focus:border-red-500 focus:ring-4 focus:ring-red-50' : 
+                      'border-gray-200 text-gray-800 focus:border-blue-500'
+                    }`} 
+                    placeholder="0.00" autoFocus 
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{formType === 'INCOME' ? 'Devotee / Source Name' : 'Item / Service Name'} *</label>
-                    <input type="text" required value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm" placeholder={formType === 'INCOME' ? 'e.g. Adesh Chandra' : 'e.g. Flower Garland'} />
+                  {/* AUTOCOMPLETE DEVOTEE/SOURCE NAME */}
+                  <div className="relative">
+                    <label className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">
+                      <span>{formType === 'INCOME' ? 'Devotee / Source Name' : 'Item / Service Name'} *</span>
+                      {isGuest && <span className="text-orange-500 bg-orange-50 px-2 py-0.5 rounded border border-orange-100">Guest User</span>}
+                    </label>
+                    <input 
+                      type="text" required 
+                      value={formData.name} 
+                      onFocus={() => formType === 'INCOME' && setShowNameDropdown(true)}
+                      onChange={e=> {
+                        setFormData({...formData, name: e.target.value});
+                        if (formType === 'INCOME') setShowNameDropdown(true);
+                      }} 
+                      className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm" 
+                      placeholder={formType === 'INCOME' ? 'e.g. Adesh Chandra' : 'e.g. Generator'} 
+                    />
+                    {showNameDropdown && formType === 'INCOME' && nameSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto ring-1 ring-black/5">
+                        {nameSuggestions.map(s => (
+                          <div 
+                            key={s.id} 
+                            onClick={() => { setFormData({...formData, name: s.name}); setShowNameDropdown(false); }}
+                            className="p-3 hover:bg-orange-50 cursor-pointer text-xs font-bold text-gray-800 transition-colors border-b border-gray-50 last:border-0"
+                          >
+                            {s.name} <span className="text-[10px] text-gray-400 font-mono ml-2">({s.phone || 'No Phone'})</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  {/* CONDITIONAL PAYMENT OR STATUS */}
                   <div>
-                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Payment Method *</label>
-                    <select value={formData.paymentMethod} onChange={e=>setFormData({...formData, paymentMethod: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer appearance-none">
-                      <option value="CASH">CASH</option>
-                      <option value="BANK_TRANSFER">BANK TRANSFER</option>
-                      <option value="MOBILE_BANKING">MOBILE BANKING</option>
-                      <option value="CHEQUE">CHEQUE</option>
-                    </select>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">
+                      {formType === 'INCOME' || formType === 'EXPENSE' ? 'Payment Method *' : formType === 'ASSET' ? 'Asset Condition *' : 'Unit Type *'}
+                    </label>
+                    {formType === 'INCOME' || formType === 'EXPENSE' ? (
+                      <select value={formData.paymentMethod} onChange={e=>setFormData({...formData, paymentMethod: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer appearance-none">
+                        <option value="CASH">CASH</option>
+                        <option value="BANK_TRANSFER">BANK TRANSFER</option>
+                        <option value="MOBILE_BANKING">MOBILE BANKING</option>
+                        <option value="CHEQUE">CHEQUE</option>
+                      </select>
+                    ) : formType === 'ASSET' ? (
+                      <select value={formData.status} onChange={e=>setFormData({...formData, status: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer appearance-none">
+                        <option value="GOOD">GOOD / ACTIVE</option>
+                        <option value="MAINTENANCE">IN MAINTENANCE</option>
+                        <option value="DAMAGED">DAMAGED</option>
+                      </select>
+                    ) : (
+                      <select value={formData.unit} onChange={e=>setFormData({...formData, unit: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer appearance-none">
+                        <option value="pcs">Pieces (pcs)</option>
+                        <option value="kg">Kilograms (kg)</option>
+                        <option value="liters">Liters (L)</option>
+                        <option value="boxes">Boxes</option>
+                      </select>
+                    )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Purpose / Note *</label>
-                  <input type="text" required value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm" placeholder="Detailed description of transaction..." />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* PURPOSE NOTE */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Purpose / Note *</label>
+                    <input type="text" required value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm" placeholder="Detailed description..." />
+                  </div>
+
+                  {/* AUTOCOMPLETE HANDLED BY */}
+                  <div className="relative">
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Handled By *</label>
+                    <input 
+                      type="text" required 
+                      value={formData.handledBy} 
+                      onFocus={() => setShowHandledDropdown(true)}
+                      onChange={e => { setFormData({...formData, handledBy: e.target.value}); setShowHandledDropdown(true); }} 
+                      className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-blue-500 outline-none transition-all shadow-sm" 
+                      placeholder="Manager Name"
+                    />
+                    {showHandledDropdown && handledBySuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto ring-1 ring-black/5">
+                        {handledBySuggestions.map(s => (
+                          <div 
+                            key={s.id} 
+                            onClick={() => { setFormData({...formData, handledBy: s.name}); setShowHandledDropdown(false); }}
+                            className="p-3 hover:bg-gray-50 text-xs font-bold text-gray-800 cursor-pointer transition-colors border-b border-gray-50 last:border-0"
+                          >
+                            {s.name} <span className="text-[10px] text-gray-400 font-bold ml-1 uppercase tracking-widest">({s.role})</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* ZERO-COST CANVAS MEMO UPLOAD (ONLY FOR EXPENSES) */}
@@ -533,11 +826,16 @@ export default function TreasuryLedger({ session, isOnline = navigator.onLine })
                 )}
 
                 <div className="pt-6 mt-8 border-t border-gray-100">
-                  <button type="submit" disabled={submitting} className={`w-full py-4 rounded-2xl text-sm font-black uppercase tracking-widest flex justify-center items-center gap-2 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 disabled:opacity-50 text-white ${formType === 'INCOME' ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700'}`}>
+                  <button type="submit" disabled={submitting} className={`w-full py-4 rounded-2xl text-sm font-black uppercase tracking-widest flex justify-center items-center gap-2 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 disabled:opacity-50 text-white ${
+                    formType === 'INCOME' ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' : 
+                    formType === 'EXPENSE' ? 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700' :
+                    formType === 'ASSET' ? 'bg-purple-600 hover:bg-purple-700' :
+                    'bg-blue-600 hover:bg-blue-700'
+                  }`}>
                     {submitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20}/>} 
                     {submitting ? 'PROCESSING...' : `CONFIRM ${formType}`}
                   </button>
-                  <p className="text-center text-[10px] font-bold text-gray-400 mt-4 uppercase tracking-widest">A cryptographic PDF voucher will be generated.</p>
+                  <p className="text-center text-[10px] font-bold text-gray-400 mt-4 uppercase tracking-widest">Cryptographic ledger entry will be generated.</p>
                 </div>
 
               </form>
